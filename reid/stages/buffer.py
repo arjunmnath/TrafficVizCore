@@ -145,7 +145,9 @@ class ReIDBufferStage(PipelineStage):
             # Convert CompressedTrack structure to dictionary
             from tracking.serialization import JsonSerializer
 
-            bt.compressed_track = JsonSerializer.serialize_to_dict(terminated_track.compressed_track)
+            bt.compressed_track = JsonSerializer.serialize_to_dict(
+                terminated_track.compressed_track
+            )
 
         bt.termination_timestamp = term_time
         bt.terminated_at_wall_clock = wall_clock

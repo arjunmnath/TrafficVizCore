@@ -24,6 +24,7 @@ class Detector:
 
         if device == "auto":
             import torch
+
             if torch.cuda.is_available():
                 device = "cuda"
             elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
@@ -34,7 +35,6 @@ class Detector:
         self.model = YOLO(model_name)
         if device is not None and device != "cpu":
             self.model.to(device)
-
 
     def detect(
         self,

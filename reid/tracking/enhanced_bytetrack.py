@@ -15,7 +15,13 @@ from .quality import TrackQuality
 class EnhancedSTrack(STrack):
     """STrack representation extended with appearance embeddings, recall support, and quality metrics."""
 
-    def __init__(self, xywh: np.ndarray[Any, Any], score: float, cls: Any, feat: Optional[np.ndarray[Any, Any]] = None):
+    def __init__(
+        self,
+        xywh: np.ndarray[Any, Any],
+        score: float,
+        cls: Any,
+        feat: Optional[np.ndarray[Any, Any]] = None,
+    ):
         """Initialize track with appearance features and quality statistics if available.
 
         Args:
@@ -81,7 +87,9 @@ class EnhancedSTrack(STrack):
         self.total_conf += float(new_track.score)
         self.num_detections += 1
         self.consecutive_associations += 1
-        self.max_consecutive_associations = max(self.max_consecutive_associations, self.consecutive_associations)
+        self.max_consecutive_associations = max(
+            self.max_consecutive_associations, self.consecutive_associations
+        )
 
     def re_activate(self, new_track: STrack, frame_id: int, new_id: bool = False) -> None:
         """Reactivate track state, smooth appearance features, and update quality metrics.
@@ -98,7 +106,9 @@ class EnhancedSTrack(STrack):
         # Update quality metrics
         self.lost_recovered_count += 1
         self.consecutive_associations = 1
-        self.max_consecutive_associations = max(self.max_consecutive_associations, self.consecutive_associations)
+        self.max_consecutive_associations = max(
+            self.max_consecutive_associations, self.consecutive_associations
+        )
         self.total_conf += float(new_track.score)
         self.num_detections += 1
 
@@ -137,7 +147,9 @@ class EnhancedSTrack(STrack):
         self.recall_count += 1
         self.lost_recovered_count += 1
         self.consecutive_associations = 1
-        self.max_consecutive_associations = max(self.max_consecutive_associations, self.consecutive_associations)
+        self.max_consecutive_associations = max(
+            self.max_consecutive_associations, self.consecutive_associations
+        )
         self.total_conf += float(new_track.score)
         self.num_detections += 1
 
@@ -184,12 +196,16 @@ class EnhancedByteTracker(BYTETracker):
 
         # Quality configuration
         self.quality_enabled = getattr(args, "quality_enabled", True)
-        self.quality_weights = getattr(args, "quality_weights", {
-            "detector_confidence": 0.3,
-            "track_duration": 0.2,
-            "embedding_stability": 0.3,
-            "association_consistency": 0.2,
-        })
+        self.quality_weights = getattr(
+            args,
+            "quality_weights",
+            {
+                "detector_confidence": 0.3,
+                "track_duration": 0.2,
+                "embedding_stability": 0.3,
+                "association_consistency": 0.2,
+            },
+        )
 
         # Event configuration
         self.lifecycle_events_enabled = getattr(args, "lifecycle_events_enabled", True)
@@ -229,14 +245,16 @@ class EnhancedByteTracker(BYTETracker):
                     if isinstance(last_layer, Detect) and not getattr(last_layer, "end2end", False):
                         # Register hook to extract input of Detect layer
                         def pre_hook(module: Any, input_tensor: Any) -> None:
-                            predictor._feats = list(input_tensor[0])  # unroll input tensors to prevent mutation
+                            predictor._feats = list(
+                                input_tensor[0]
+                            )  # unroll input tensors to prevent mutation
 
-                        predictor._hook = last_layer.register_forward_pre_hook(
-                            pre_hook
-                        )
+                        predictor._hook = last_layer.register_forward_pre_hook(pre_hook)
                         predictor._feats = None  # Initialize _feats state
 
-    def extract_features(self, frame: Optional[np.ndarray[Any, Any]], bboxes: np.ndarray[Any, Any]) -> Optional[List[np.ndarray[Any, Any]]]:
+    def extract_features(
+        self, frame: Optional[np.ndarray[Any, Any]], bboxes: np.ndarray[Any, Any]
+    ) -> Optional[List[np.ndarray[Any, Any]]]:
         """Extract appearance embeddings for detection bounding boxes.
 
         Args:
@@ -281,9 +299,7 @@ class EnhancedByteTracker(BYTETracker):
             tracks.append(track)
         return cast(List[STrack], tracks)
 
-    def get_dists(
-        self, tracks: List[STrack], detections: List[STrack]
-    ) -> np.ndarray[Any, Any]:
+    def get_dists(self, tracks: List[STrack], detections: List[STrack]) -> np.ndarray[Any, Any]:
         """Compute the combined cost matrix using custom weights and CostFusion.
 
         Args:
@@ -338,7 +354,9 @@ class EnhancedByteTracker(BYTETracker):
         if callback in self._listeners:
             self._listeners.remove(callback)
 
-    def emit_event(self, event_type: str, track_id: int, frame_id: int, timestamp: float, track: Any) -> None:
+    def emit_event(
+        self, event_type: str, track_id: int, frame_id: int, timestamp: float, track: Any
+    ) -> None:
         """Dispatch an event to all subscribed observers."""
         if not getattr(self.args, "lifecycle_events_enabled", True):
             return

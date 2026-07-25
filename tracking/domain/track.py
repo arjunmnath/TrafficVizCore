@@ -257,12 +257,22 @@ def get_cleared_detection_frame(
         frames = history.get("frames", [])
         timestamps = history.get("timestamps", [])
         bboxes = history.get("bboxes", [])
-    elif hasattr(actual_track, "frames") and hasattr(actual_track, "timestamps") and hasattr(actual_track, "bboxes"):
+    elif (
+        hasattr(actual_track, "frames")
+        and hasattr(actual_track, "timestamps")
+        and hasattr(actual_track, "bboxes")
+    ):
         frames = getattr(actual_track, "frames")
         timestamps = getattr(actual_track, "timestamps")
         bboxes = getattr(actual_track, "bboxes")
 
-    if not frames or not timestamps or not bboxes or len(frames) != len(timestamps) or len(frames) != len(bboxes):
+    if (
+        not frames
+        or not timestamps
+        or not bboxes
+        or len(frames) != len(timestamps)
+        or len(frames) != len(bboxes)
+    ):
         raise ValueError("Track lacks standard frame, timestamp, or bounding box history.")
 
     n = len(timestamps)
@@ -330,4 +340,3 @@ def get_cleared_detection_frame(
         raise ValueError("No frames found in track history.")
 
     return best_frame, best_time, best_bbox, best_score
-

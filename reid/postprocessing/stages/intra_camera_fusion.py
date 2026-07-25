@@ -108,7 +108,9 @@ class IntraCameraTrajectoryFusionStage(PostProcessingStage):
 
         return 0.0, 0.0, 0, 0
 
-    def _get_track_centroids(self, track: TerminatedTrack) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+    def _get_track_centroids(
+        self, track: TerminatedTrack
+    ) -> Tuple[Tuple[float, float], Tuple[float, float]]:
         """Get (start_centroid, end_centroid) from track history or compressed track."""
         if track.history is not None:
             bboxes = track.history.get("bboxes", [])
@@ -265,7 +267,10 @@ class IntraCameraTrajectoryFusionStage(PostProcessingStage):
             secondary.history = merged_history
 
         # 2. Merge appearance embeddings
-        if primary.appearance_embeddings is not None and secondary.appearance_embeddings is not None:
+        if (
+            primary.appearance_embeddings is not None
+            and secondary.appearance_embeddings is not None
+        ):
             p_emb = np.asarray(primary.appearance_embeddings, dtype=np.float32)
             s_emb = np.asarray(secondary.appearance_embeddings, dtype=np.float32)
             if p_emb.ndim == 1:

@@ -44,14 +44,16 @@ def load_tracks_by_key(json_path: Path) -> dict[str, dict]:
         sys.exit(1)
 
     if not isinstance(data, dict):
-        console.print("[bold red]Error: Unsupported JSON format. Expected a dict keyed by feed name.[/bold red]")
+        console.print(
+            "[bold red]Error: Unsupported JSON format. Expected a dict keyed by feed name.[/bold red]"
+        )
         sys.exit(1)
 
     by_key: dict[str, dict] = {}
     for feed_name, tracks_list in data.items():
         for entry in tracks_list:
-            tid         = entry["track_id"]
-            comp_track  = entry.get("compressed_track")
+            tid = entry["track_id"]
+            comp_track = entry.get("compressed_track")
             if comp_track is None:
                 continue
             key = f"{feed_name}:{tid}"
@@ -100,35 +102,52 @@ def main() -> None:
         description="Compare embeddings for one or more tracks and plot cosine similarity heatmap."
     )
     parser.add_argument(
-        "--json_path", "-j", type=str, required=True,
+        "--json_path",
+        "-j",
+        type=str,
+        required=True,
         help="Path to the registry JSON produced by run_reid_pipeline.py.",
     )
     parser.add_argument(
-        "--npz_path", "-n", type=str, default=None,
+        "--npz_path",
+        "-n",
+        type=str,
+        default=None,
         help="Path to the NPZ embeddings file. Defaults to <json_path>.npz.",
     )
     parser.add_argument(
-        "--ids", type=str, nargs="+",
+        "--ids",
+        type=str,
+        nargs="+",
         help=(
             "Track keys to compare, in the format 'feed_name:track_id' "
             "(e.g. --ids clip1.mp4:1 clip1.mp4:3 clip2.mp4:2)."
         ),
     )
     parser.add_argument(
-        "--embedding-type", "-e",
-        choices=["occ", "smooth"], default="smooth",
+        "--embedding-type",
+        "-e",
+        choices=["occ", "smooth"],
+        default="smooth",
         help="Which embeddings to use: 'occ' = raw per-frame; 'smooth' = moving-average.",
     )
     parser.add_argument(
-        "--output_plot", "-o", type=str, default="similarity_matrix.png",
+        "--output_plot",
+        "-o",
+        type=str,
+        default="similarity_matrix.png",
         help="Output filepath for the similarity heatmap.",
     )
     parser.add_argument(
-        "--cmap", type=str, default="coolwarm",
+        "--cmap",
+        type=str,
+        default="coolwarm",
         help="Matplotlib colormap (e.g. coolwarm, viridis, plasma).",
     )
     parser.add_argument(
-        "--show", "-s", action="store_true",
+        "--show",
+        "-s",
+        action="store_true",
         help="Show the interactive plot window before saving.",
     )
     # Deprecated legacy flags — still accepted for compatibility
@@ -195,9 +214,9 @@ def main() -> None:
         embs, labels = extract_embeddings_for_key(key, npz, embedding_type)
         n = len(embs)
         comp_track = by_key[key]
-        cls        = comp_track.get("class", "?")
-        start_t    = comp_track.get("start_time", 0.0)
-        end_t      = comp_track.get("end_time", 0.0)
+        cls = comp_track.get("class", "?")
+        start_t = comp_track.get("start_time", 0.0)
+        end_t = comp_track.get("end_time", 0.0)
         console.print(
             f"[bold green]{key}[/bold green] ({cls}, {start_t:.2f}s–{end_t:.2f}s): "
             f"Found {n} embedding frames."

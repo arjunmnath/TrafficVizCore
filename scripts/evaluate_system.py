@@ -169,7 +169,9 @@ def discover_s06_videos(dataset_dir: str, custom_videos: Optional[List[str]]) ->
     return discovered
 
 
-def load_ground_truth_records(videos: List[str], max_frames: int) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[int, List[Dict[str, Any]]]]]:
+def load_ground_truth_records(
+    videos: List[str], max_frames: int
+) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[int, List[Dict[str, Any]]]]]:
     """Load reference ground truth frame records and tracks from MTSC files or dataset/eval."""
     gt_frames_flat: List[Dict[str, Any]] = []
     gt_by_feed: Dict[str, Dict[int, List[Dict[str, Any]]]] = {}
@@ -180,7 +182,9 @@ def load_ground_truth_records(videos: List[str], max_frames: int) -> Tuple[List[
         mtsc_path = os.path.join(cam_dir, "mtsc", "mtsc_tnt_mask_rcnn.txt")
 
         if not os.path.exists(mtsc_path):
-            fallback_path = os.path.join(workspace_root, "input_vids", "S06", feed_name, "mtsc", "mtsc_tnt_mask_rcnn.txt")
+            fallback_path = os.path.join(
+                workspace_root, "input_vids", "S06", feed_name, "mtsc", "mtsc_tnt_mask_rcnn.txt"
+            )
             if os.path.exists(fallback_path):
                 mtsc_path = fallback_path
 
@@ -209,12 +213,14 @@ def load_ground_truth_records(videos: List[str], max_frames: int) -> Tuple[List[
 
             for f_num in sorted(feed_dict.keys()):
                 items = feed_dict[f_num]
-                gt_frames_flat.append({
-                    "feed": feed_name,
-                    "frame": f_num,
-                    "boxes": [it["bbox"] for it in items],
-                    "ids": [it["track_id"] for it in items],
-                })
+                gt_frames_flat.append(
+                    {
+                        "feed": feed_name,
+                        "frame": f_num,
+                        "boxes": [it["bbox"] for it in items],
+                        "ids": [it["track_id"] for it in items],
+                    }
+                )
 
     return gt_frames_flat, gt_by_feed
 
@@ -335,7 +341,7 @@ def evaluate_system_performance(
         key = (p["feed"], p["frame"])
         if key not in preds_map:
             preds_map[key] = []
-        
+
         master_id = track_to_master.get((p["feed"], p["track_id"]), p["track_id"])
         preds_map[key].append({"track_id": master_id, "bbox": p["bbox"]})
 
@@ -410,24 +416,48 @@ def save_evaluation_results(
         f.write("        CCTV RE-IDENTIFICATION & TRACKING EVALUATION REPORT             \n")
         f.write("========================================================================\n")
         f.write(f"Dataset Directory: {args.dataset_dir}\n")
-        f.write(f"Video Feeds ({len(videos)}): {', '.join([os.path.basename(os.path.dirname(v)) for v in videos])}\n")
-        f.write(f"Frames per video: {args.num_frames} | Device: {args.device} | Model: {args.yolo_model}\n")
+        f.write(
+            f"Video Feeds ({len(videos)}): {', '.join([os.path.basename(os.path.dirname(v)) for v in videos])}\n"
+        )
+        f.write(
+            f"Frames per video: {args.num_frames} | Device: {args.device} | Model: {args.yolo_model}\n"
+        )
         f.write("------------------------------------------------------------------------\n\n")
 
         f.write(f"{'Metric':<25} | {'Baseline':<12} | {'Fused':<12} | {'Delta Gain':<12}\n")
         f.write("-" * 68 + "\n")
-        f.write(f"{'Rank-1 Accuracy (%)':<25} | {reid_base['rank1']:11.2f}% | {reid_fused['rank1']:11.2f}% | {reid_fused['rank1'] - reid_base['rank1']:+11.2f}%\n")
-        f.write(f"{'Rank-5 Accuracy (%)':<25} | {reid_base['rank5']:11.2f}% | {reid_fused['rank5']:11.2f}% | {reid_fused['rank5'] - reid_base['rank5']:+11.2f}%\n")
-        f.write(f"{'mAP (%)':<25} | {reid_base['mAP']:11.2f}% | {reid_fused['mAP']:11.2f}% | {reid_fused['mAP'] - reid_base['mAP']:+11.2f}%\n")
-        f.write(f"{'mINP (%)':<25} | {reid_base['mINP']:11.2f}% | {reid_fused['mINP']:11.2f}% | {reid_fused['mINP'] - reid_base['mINP']:+11.2f}%\n")
+        f.write(
+            f"{'Rank-1 Accuracy (%)':<25} | {reid_base['rank1']:11.2f}% | {reid_fused['rank1']:11.2f}% | {reid_fused['rank1'] - reid_base['rank1']:+11.2f}%\n"
+        )
+        f.write(
+            f"{'Rank-5 Accuracy (%)':<25} | {reid_base['rank5']:11.2f}% | {reid_fused['rank5']:11.2f}% | {reid_fused['rank5'] - reid_base['rank5']:+11.2f}%\n"
+        )
+        f.write(
+            f"{'mAP (%)':<25} | {reid_base['mAP']:11.2f}% | {reid_fused['mAP']:11.2f}% | {reid_fused['mAP'] - reid_base['mAP']:+11.2f}%\n"
+        )
+        f.write(
+            f"{'mINP (%)':<25} | {reid_base['mINP']:11.2f}% | {reid_fused['mINP']:11.2f}% | {reid_fused['mINP'] - reid_base['mINP']:+11.2f}%\n"
+        )
         f.write("-" * 68 + "\n")
-        f.write(f"{'IDF1 Score (%)':<25} | {mot_base['IDF1']:11.2f}% | {mot_fused['IDF1']:11.2f}% | {mot_fused['IDF1'] - mot_base['IDF1']:+11.2f}%\n")
-        f.write(f"{'HOTA Score (%)':<25} | {mot_base['HOTA']:11.2f}% | {mot_fused['HOTA']:11.2f}% | {mot_fused['HOTA'] - mot_base['HOTA']:+11.2f}%\n")
-        f.write(f"{'DetA Score (%)':<25} | {mot_base['DetA']:11.2f}% | {mot_fused['DetA']:11.2f}% | {mot_fused['DetA'] - mot_base['DetA']:+11.2f}%\n")
-        f.write(f"{'AssA Score (%)':<25} | {mot_base['AssA']:11.2f}% | {mot_fused['AssA']:11.2f}% | {mot_fused['AssA'] - mot_base['AssA']:+11.2f}%\n")
-        f.write(f"{'MOTA (%)':<25} | {mot_base['MOTA']:11.2f}% | {mot_fused['MOTA']:11.2f}% | {mot_fused['MOTA'] - mot_base['MOTA']:+11.2f}%\n")
+        f.write(
+            f"{'IDF1 Score (%)':<25} | {mot_base['IDF1']:11.2f}% | {mot_fused['IDF1']:11.2f}% | {mot_fused['IDF1'] - mot_base['IDF1']:+11.2f}%\n"
+        )
+        f.write(
+            f"{'HOTA Score (%)':<25} | {mot_base['HOTA']:11.2f}% | {mot_fused['HOTA']:11.2f}% | {mot_fused['HOTA'] - mot_base['HOTA']:+11.2f}%\n"
+        )
+        f.write(
+            f"{'DetA Score (%)':<25} | {mot_base['DetA']:11.2f}% | {mot_fused['DetA']:11.2f}% | {mot_fused['DetA'] - mot_base['DetA']:+11.2f}%\n"
+        )
+        f.write(
+            f"{'AssA Score (%)':<25} | {mot_base['AssA']:11.2f}% | {mot_fused['AssA']:11.2f}% | {mot_fused['AssA'] - mot_base['AssA']:+11.2f}%\n"
+        )
+        f.write(
+            f"{'MOTA (%)':<25} | {mot_base['MOTA']:11.2f}% | {mot_fused['MOTA']:11.2f}% | {mot_fused['MOTA'] - mot_base['MOTA']:+11.2f}%\n"
+        )
         f.write("-" * 68 + "\n")
-        f.write(f"{'Execution Time (s)':<25} | {time_base:11.2f}s | {time_fused:11.2f}s | {time_fused - time_base:+11.2f}s\n")
+        f.write(
+            f"{'Execution Time (s)':<25} | {time_base:11.2f}s | {time_fused:11.2f}s | {time_fused - time_base:+11.2f}s\n"
+        )
         f.write("========================================================================\n")
 
 
@@ -458,14 +488,22 @@ def main():
     )
 
     # Run Baseline Experiment
-    console.print("\n[bold yellow]• Evaluating Baseline Tracking (No Intra-Camera Fusion)...[/bold yellow]")
-    reg_base, preds_base, time_base = run_pipeline_experiment(videos, args, console, enable_intra_camera_fusion=False)
+    console.print(
+        "\n[bold yellow]• Evaluating Baseline Tracking (No Intra-Camera Fusion)...[/bold yellow]"
+    )
+    reg_base, preds_base, time_base = run_pipeline_experiment(
+        videos, args, console, enable_intra_camera_fusion=False
+    )
     reid_base, mot_base = evaluate_system_performance(reg_base, preds_base, gt_frames_flat)
     console.print(f"  Completed Baseline in [bold white]{time_base:.2f}s[/bold white].")
 
     # Run Fused Experiment
-    console.print("\n[bold yellow]• Evaluating Fused Tracking (With Intra-Camera Fusion Enabled)...[/bold yellow]")
-    reg_fused, preds_fused, time_fused = run_pipeline_experiment(videos, args, console, enable_intra_camera_fusion=True)
+    console.print(
+        "\n[bold yellow]• Evaluating Fused Tracking (With Intra-Camera Fusion Enabled)...[/bold yellow]"
+    )
+    reg_fused, preds_fused, time_fused = run_pipeline_experiment(
+        videos, args, console, enable_intra_camera_fusion=True
+    )
     reid_fused, mot_fused = evaluate_system_performance(reg_fused, preds_fused, gt_frames_flat)
     console.print(f"  Completed Fused in [bold white]{time_fused:.2f}s[/bold white].")
 
@@ -478,24 +516,84 @@ def main():
     table.add_column("Delta / Gain", justify="right", style="bold magenta")
 
     # ReID Metrics
-    table.add_row("ReID", "Rank-1 Accuracy (%)", f"{reid_base['rank1']:.2f}%", f"{reid_fused['rank1']:.2f}%", f"+{reid_fused['rank1'] - reid_base['rank1']:.2f}%")
-    table.add_row("ReID", "Rank-5 Accuracy (%)", f"{reid_base['rank5']:.2f}%", f"{reid_fused['rank5']:.2f}%", f"+{reid_fused['rank5'] - reid_base['rank5']:.2f}%")
-    table.add_row("ReID", "mAP (%)", f"{reid_base['mAP']:.2f}%", f"{reid_fused['mAP']:.2f}%", f"+{reid_fused['mAP'] - reid_base['mAP']:.2f}%")
-    table.add_row("ReID", "mINP (%)", f"{reid_base['mINP']:.2f}%", f"{reid_fused['mINP']:.2f}%", f"+{reid_fused['mINP'] - reid_base['mINP']:.2f}%")
+    table.add_row(
+        "ReID",
+        "Rank-1 Accuracy (%)",
+        f"{reid_base['rank1']:.2f}%",
+        f"{reid_fused['rank1']:.2f}%",
+        f"+{reid_fused['rank1'] - reid_base['rank1']:.2f}%",
+    )
+    table.add_row(
+        "ReID",
+        "Rank-5 Accuracy (%)",
+        f"{reid_base['rank5']:.2f}%",
+        f"{reid_fused['rank5']:.2f}%",
+        f"+{reid_fused['rank5'] - reid_base['rank5']:.2f}%",
+    )
+    table.add_row(
+        "ReID",
+        "mAP (%)",
+        f"{reid_base['mAP']:.2f}%",
+        f"{reid_fused['mAP']:.2f}%",
+        f"+{reid_fused['mAP'] - reid_base['mAP']:.2f}%",
+    )
+    table.add_row(
+        "ReID",
+        "mINP (%)",
+        f"{reid_base['mINP']:.2f}%",
+        f"{reid_fused['mINP']:.2f}%",
+        f"+{reid_fused['mINP'] - reid_base['mINP']:.2f}%",
+    )
 
     table.add_section()
 
     # MOT Metrics
-    table.add_row("Tracking", "IDF1 Score (%)", f"{mot_base['IDF1']:.2f}%", f"{mot_fused['IDF1']:.2f}%", f"+{mot_fused['IDF1'] - mot_base['IDF1']:.2f}%")
-    table.add_row("Tracking", "HOTA Score (%)", f"{mot_base['HOTA']:.2f}%", f"{mot_fused['HOTA']:.2f}%", f"+{mot_fused['HOTA'] - mot_base['HOTA']:.2f}%")
-    table.add_row("Tracking", "DetA (Detection Acc %)", f"{mot_base['DetA']:.2f}%", f"{mot_fused['DetA']:.2f}%", f"+{mot_fused['DetA'] - mot_base['DetA']:.2f}%")
-    table.add_row("Tracking", "AssA (Association Acc %)", f"{mot_base['AssA']:.2f}%", f"{mot_fused['AssA']:.2f}%", f"+{mot_fused['AssA'] - mot_base['AssA']:.2f}%")
-    table.add_row("Tracking", "MOTA (%)", f"{mot_base['MOTA']:.2f}%", f"{mot_fused['MOTA']:.2f}%", f"+{mot_fused['MOTA'] - mot_base['MOTA']:.2f}%")
+    table.add_row(
+        "Tracking",
+        "IDF1 Score (%)",
+        f"{mot_base['IDF1']:.2f}%",
+        f"{mot_fused['IDF1']:.2f}%",
+        f"+{mot_fused['IDF1'] - mot_base['IDF1']:.2f}%",
+    )
+    table.add_row(
+        "Tracking",
+        "HOTA Score (%)",
+        f"{mot_base['HOTA']:.2f}%",
+        f"{mot_fused['HOTA']:.2f}%",
+        f"+{mot_fused['HOTA'] - mot_base['HOTA']:.2f}%",
+    )
+    table.add_row(
+        "Tracking",
+        "DetA (Detection Acc %)",
+        f"{mot_base['DetA']:.2f}%",
+        f"{mot_fused['DetA']:.2f}%",
+        f"+{mot_fused['DetA'] - mot_base['DetA']:.2f}%",
+    )
+    table.add_row(
+        "Tracking",
+        "AssA (Association Acc %)",
+        f"{mot_base['AssA']:.2f}%",
+        f"{mot_fused['AssA']:.2f}%",
+        f"+{mot_fused['AssA'] - mot_base['AssA']:.2f}%",
+    )
+    table.add_row(
+        "Tracking",
+        "MOTA (%)",
+        f"{mot_base['MOTA']:.2f}%",
+        f"{mot_fused['MOTA']:.2f}%",
+        f"+{mot_fused['MOTA'] - mot_base['MOTA']:.2f}%",
+    )
 
     table.add_section()
 
     # Performance
-    table.add_row("Performance", "Execution Time (s)", f"{time_base:.2f}s", f"{time_fused:.2f}s", f"{time_fused - time_base:+.2f}s")
+    table.add_row(
+        "Performance",
+        "Execution Time (s)",
+        f"{time_base:.2f}s",
+        f"{time_fused:.2f}s",
+        f"{time_fused - time_base:+.2f}s",
+    )
 
     console.print("\n")
     console.print(table)

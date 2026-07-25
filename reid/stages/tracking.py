@@ -102,13 +102,16 @@ class TrackingStage(PipelineStage):
                 compressed_track = getattr(terminated, "compressed_track", None)
                 if compressed_track is not None:
                     from tracking.serialization import JsonSerializer
+
                     serialized_dict = JsonSerializer.serialize_to_dict(compressed_track)
                     pipeline.registry.add_compressed_track(target_id, serialized_dict)
 
             # Notify ReIDBufferStage of track termination
             from reid.stages.buffer import ReIDBufferStage
 
-            buffer_stage = next((s for s in pipeline.stages if isinstance(s, ReIDBufferStage)), None)
+            buffer_stage = next(
+                (s for s in pipeline.stages if isinstance(s, ReIDBufferStage)), None
+            )
             if buffer_stage is not None:
                 term_timestamp = None
                 if track.history and track.history.get("timestamps"):
@@ -165,12 +168,14 @@ class TrackingStage(PipelineStage):
             for t in tracks:
                 bbox = t[0:4].tolist()  # [x1, y1, x2, y2]
                 track_id = int(t[4])
-                pipeline.recorded_predictions.append({
-                    "feed": data.feed_name,
-                    "frame": data.frame_count,
-                    "track_id": track_id,
-                    "bbox": bbox,
-                })
+                pipeline.recorded_predictions.append(
+                    {
+                        "feed": data.feed_name,
+                        "frame": data.frame_count,
+                        "track_id": track_id,
+                        "bbox": bbox,
+                    }
+                )
 
         listener = data.listener
 

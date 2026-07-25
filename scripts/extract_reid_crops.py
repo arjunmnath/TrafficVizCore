@@ -61,9 +61,9 @@ def sample_track_detections(
         return []
 
     t_start = track.metadata.start_timestamp
-    t_end   = track.metadata.end_timestamp
-    feed    = track.metadata.camera_id
-    tid     = track.metadata.track_id
+    t_end = track.metadata.end_timestamp
+    feed = track.metadata.camera_id
+    tid = track.metadata.track_id
 
     detections = []
 
@@ -74,13 +74,15 @@ def sample_track_detections(
                 x1, y1, x2, y2 = BBoxReconstructor.reconstruct(track, frame_t)
             except Exception:
                 continue
-            detections.append({
-                "feed_name":         feed,
-                "track_id":          tid,
-                "timestamp_seconds": frame_t,
-                "frame":             int(frame_idx),
-                "bbox":              [x1, y1, x2, y2],
-            })
+            detections.append(
+                {
+                    "feed_name": feed,
+                    "track_id": tid,
+                    "timestamp_seconds": frame_t,
+                    "frame": int(frame_idx),
+                    "bbox": [x1, y1, x2, y2],
+                }
+            )
         return detections
 
     # Sample with a time gap
@@ -101,22 +103,24 @@ def sample_track_detections(
             continue
 
         frame_t = track.time_model.frame_to_timestamp(frame_idx)
-        
+
         # Reconstruct at actual frame timestamp for maximum coordinate accuracy
         try:
             x1, y1, x2, y2 = BBoxReconstructor.reconstruct(track, frame_t)
         except Exception:
             pass
 
-        detections.append({
-            "feed_name":         feed,
-            "track_id":          tid,
-            "timestamp_seconds": frame_t,
-            "frame":             frame_idx,
-            "bbox":              [x1, y1, x2, y2],
-        })
+        detections.append(
+            {
+                "feed_name": feed,
+                "track_id": tid,
+                "timestamp_seconds": frame_t,
+                "frame": frame_idx,
+                "bbox": [x1, y1, x2, y2],
+            }
+        )
         sampled_frames.add(frame_idx)
-        
+
         # Next sample target is at least time_gap after the actual frame's timestamp
         t = frame_t + time_gap
 
@@ -132,18 +136,18 @@ def extract_reid_crops(
     global_ids: list[int] | None = None,
     matches_path: str | None = None,
 ) -> None:
-    json_path  = Path(json_path)
-    video_dir  = Path(video_dir)
+    json_path = Path(json_path)
+    video_dir = Path(video_dir)
     output_dir = Path(output_dir)
 
     console = Console()
 
     stats = {
-        "Unique Tracks":    0,
-        "Sampled Frames":   0,
-        "Extracted Crops":  0,
-        "Missing Videos":   0,
-        "Frame Errors":     0,
+        "Unique Tracks": 0,
+        "Sampled Frames": 0,
+        "Extracted Crops": 0,
+        "Missing Videos": 0,
+        "Frame Errors": 0,
     }
 
     activity_log: list[str] = []
@@ -187,8 +191,8 @@ def extract_reid_crops(
     if isinstance(registry, dict):
         for feed_name, tracks_list in registry.items():
             for entry in tracks_list:
-                tid          = entry["track_id"]
-                comp_track   = entry.get("compressed_track")
+                tid = entry["track_id"]
+                comp_track = entry.get("compressed_track")
                 if comp_track is None:
                     continue
                 tracks_map[(feed_name, tid)] = comp_track
@@ -217,10 +221,12 @@ def extract_reid_crops(
         try:
             with open(resolved_matches_path) as f:
                 matches_data = json.load(f)
-            
+
             # Sort matches by similarity descending to resolve greedily
-            matches_data = sorted(matches_data, key=lambda x: x.get("similarity", 0.0), reverse=True)
-            
+            matches_data = sorted(
+                matches_data, key=lambda x: x.get("similarity", 0.0), reverse=True
+            )
+
             for m in matches_data:
                 node_a = (m["feed_a"], int(m["track_a"]))
                 node_b = (m["feed_b"], int(m["track_b"]))
@@ -241,7 +247,7 @@ def extract_reid_crops(
 
     # Assign global_id string → list of (feed_name, track_id)
     global_id_map: dict[str, list[tuple[str, int]]] = {}
-    
+
     # 1. Assign global IDs to Resolved Matched Groups first
     idx = 1
     # Sort matched groups by first node name, then track ID to ensure deterministic order
@@ -267,7 +273,7 @@ def extract_reid_crops(
     by_video: dict[str, list[dict]] = defaultdict(list)
 
     for global_id, nodes in global_id_map.items():
-        for (feed_name, track_id) in nodes:
+        for feed_name, track_id in nodes:
             comp_track = tracks_map[(feed_name, track_id)]
             dets = sample_track_detections(comp_track, min_time_gap_seconds)
             stats["Sampled Frames"] += len(dets)
@@ -303,27 +309,27 @@ def extract_reid_crops(
     )
 
     videos_task = overall_progress.add_task("Overall Progress", total=total_videos)
-    video_task  = video_progress.add_task("Active Video Detections", total=0, visible=False)
+    video_task = video_progress.add_task("Active Video Detections", total=0, visible=False)
 
     config_info = {
-        "JSON Path":   str(json_path),
-        "Video Dir":   str(video_dir),
-        "Output Dir":  str(output_dir),
-        "Time Gap":    f"{min_time_gap_seconds}s",
+        "JSON Path": str(json_path),
+        "Video Dir": str(video_dir),
+        "Output Dir": str(output_dir),
+        "Time Gap": f"{min_time_gap_seconds}s",
     }
 
-    current_video_name   = "None"
+    current_video_name = "None"
     current_video_status = "Waiting..."
 
     def generate_layout() -> Layout:
         layout = Layout()
         layout.split_column(
             Layout(name="header", size=3),
-            Layout(name="body",   ratio=1),
+            Layout(name="body", ratio=1),
             Layout(name="footer", size=3),
         )
         layout["body"].split_row(
-            Layout(name="left",  ratio=2),
+            Layout(name="left", ratio=2),
             Layout(name="right", ratio=3),
         )
 
@@ -341,9 +347,11 @@ def extract_reid_crops(
         for k, v in config_info.items():
             cfg_tbl.add_row(k, str(v))
 
-        stats_tbl = Table(title="[bold yellow]Statistics[/bold yellow]", box=box.ROUNDED, expand=True)
+        stats_tbl = Table(
+            title="[bold yellow]Statistics[/bold yellow]", box=box.ROUNDED, expand=True
+        )
         stats_tbl.add_column("Metric", style="yellow")
-        stats_tbl.add_column("Count",  style="white", justify="right")
+        stats_tbl.add_column("Count", style="white", justify="right")
         for k, v in stats.items():
             stats_tbl.add_row(k, f"[bold]{v}[/bold]" if v > 0 else str(v))
 
@@ -354,7 +362,7 @@ def extract_reid_crops(
         right_layout = Layout()
         right_layout.split_column(
             Layout(name="progress_section", size=9),
-            Layout(name="events_section",   ratio=1),
+            Layout(name="events_section", ratio=1),
         )
         prog_table = Table.grid(padding=1, expand=True)
         prog_table.add_row(
@@ -367,22 +375,31 @@ def extract_reid_crops(
         prog_table.add_row(video_progress)
 
         right_layout["progress_section"].update(
-            Panel(prog_table, title="[bold yellow]Extraction Progress[/bold yellow]",
-                  border_style="yellow", box=box.ROUNDED)
+            Panel(
+                prog_table,
+                title="[bold yellow]Extraction Progress[/bold yellow]",
+                border_style="yellow",
+                box=box.ROUNDED,
+            )
         )
 
         events_text = Text()
         for ev in activity_log[-12:]:
             events_text.append(Text.from_markup(ev + "\n"))
         right_layout["events_section"].update(
-            Panel(events_text, title="[bold red]Activity Log[/bold red]",
-                  border_style="red", box=box.ROUNDED)
+            Panel(
+                events_text,
+                title="[bold red]Activity Log[/bold red]",
+                border_style="red",
+                box=box.ROUNDED,
+            )
         )
         layout["body"]["right"].update(right_layout)
 
         footer_text = Text(
             "Extracting crops from compressed tracks. Press Ctrl+C to abort.",
-            style="italic dim white", justify="center",
+            style="italic dim white",
+            justify="center",
         )
         layout["footer"].update(Panel(footer_text, border_style="grey37", box=box.ROUNDED))
         return layout
@@ -393,7 +410,7 @@ def extract_reid_crops(
         nonlocal current_video_name, current_video_status
 
         for video_idx, (video_name, detections) in enumerate(by_video.items(), 1):
-            current_video_name   = video_name
+            current_video_name = video_name
             current_video_status = f"Initializing {video_name}"
             if live_instance:
                 live_instance.update(generate_layout())
@@ -481,22 +498,17 @@ def extract_reid_crops(
                         live_instance.update(generate_layout())
                     continue
 
-                crop = frame[y1:y1 + bbox_h, x1:x1 + bbox_w]
+                crop = frame[y1 : y1 + bbox_h, x1 : x1 + bbox_w]
 
-                global_id    = str(det["global_id"])
-                track_id     = det["track_id"]
-                timestamp    = det["timestamp_seconds"]
+                global_id = str(det["global_id"])
+                track_id = det["track_id"]
+                timestamp = det["timestamp_seconds"]
 
                 person_dir = output_dir / global_id
                 person_dir.mkdir(parents=True, exist_ok=True)
 
-                stem     = Path(video_name).stem
-                out_name = (
-                    f"{stem}"
-                    f"_f{frame_idx:06d}"
-                    f"_t{track_id}"
-                    f"_s{timestamp:.2f}.jpg"
-                )
+                stem = Path(video_name).stem
+                out_name = f"{stem}_f{frame_idx:06d}_t{track_id}_s{timestamp:.2f}.jpg"
 
                 cv2.imwrite(str(person_dir / out_name), crop)
                 stats["Extracted Crops"] += 1
@@ -534,7 +546,7 @@ def extract_reid_crops(
 
     summary_table = Table(box=box.HEAVY, expand=False)
     summary_table.add_column("Metric", style="cyan")
-    summary_table.add_column("Value",  style="green")
+    summary_table.add_column("Value", style="green")
     summary_table.add_row("Total Processing Time", f"{elapsed:.2f} seconds")
     for k, v in stats.items():
         summary_table.add_row(k, str(v))
@@ -555,31 +567,50 @@ if __name__ == "__main__":
         description="Extract bounding-box crops from compressed-track registry JSON."
     )
     parser.add_argument(
-        "--json_path", "-j", type=str, required=True,
+        "--json_path",
+        "-j",
+        type=str,
+        required=True,
         help="Path to the registry JSON file produced by run_reid_pipeline.py.",
     )
     parser.add_argument(
-        "--matches_path", "-m", type=str, default=None,
+        "--matches_path",
+        "-m",
+        type=str,
+        default=None,
         help="Path to a cross-camera match JSON to group tracks into global identities.",
     )
     parser.add_argument(
-        "--video_dir", "-v", type=str, required=True,
+        "--video_dir",
+        "-v",
+        type=str,
+        required=True,
         help="Directory containing the input video files.",
     )
     parser.add_argument(
-        "--output_dir", "-o", type=str, required=True,
+        "--output_dir",
+        "-o",
+        type=str,
+        required=True,
         help="Directory to save the extracted crops.",
     )
     parser.add_argument(
-        "--min_time_gap", "-t", type=float, default=MIN_TIME_GAP_SECONDS,
+        "--min_time_gap",
+        "-t",
+        type=float,
+        default=MIN_TIME_GAP_SECONDS,
         help="Minimum time gap in seconds between sampled frames per track (default: 3 s).",
     )
     parser.add_argument(
-        "--global_ids", type=int, nargs="+", default=None,
+        "--global_ids",
+        type=int,
+        nargs="+",
+        default=None,
         help="Restrict extraction to these global IDs (default: all).",
     )
     parser.add_argument(
-        "--headless", action="store_true",
+        "--headless",
+        action="store_true",
         help="Disable the fullscreen Live TUI; print plain-text logs instead.",
     )
 

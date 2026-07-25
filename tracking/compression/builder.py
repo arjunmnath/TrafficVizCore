@@ -209,8 +209,10 @@ class CompressedTrackBuilder:
 
             # Trigger spline fitting if turning or large fitting error
             large_error = (
-                mean_w_err > 5.0 or (mean_w_err / max(1.0, avg_w)) > 0.1 or
-                mean_h_err > 5.0 or (mean_h_err / max(1.0, avg_h)) > 0.1
+                mean_w_err > 5.0
+                or (mean_w_err / max(1.0, avg_w)) > 0.1
+                or mean_h_err > 5.0
+                or (mean_h_err / max(1.0, avg_h)) > 0.1
             )
 
             if is_turning or large_error:
@@ -219,7 +221,7 @@ class CompressedTrackBuilder:
                 indices = list(range(0, n, downsample_factor))
                 if indices[-1] != n - 1:
                     indices.append(n - 1)
-                
+
                 # Keep unique indices and ensure they are sorted
                 indices = sorted(list(set(indices)))
 
@@ -231,7 +233,7 @@ class CompressedTrackBuilder:
                     if t_val not in seen_times:
                         unique_points.append([t_val, float(widths[idx]), float(heights[idx])])
                         seen_times.add(t_val)
-                
+
                 if len(unique_points) >= 2:
                     try:
                         size_model = SplineModel(unique_points)

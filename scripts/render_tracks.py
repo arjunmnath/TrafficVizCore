@@ -46,16 +46,16 @@ from tracking.domain.track import CompressedTrack
 # Colour palette — one distinct BGR colour per track id
 # ---------------------------------------------------------------------------
 _PALETTE = [
-    (0,   210, 255),  # amber-yellow
-    (255, 100,   0),  # blue
-    ( 50, 220,  50),  # green
-    (  0,  60, 255),  # red
-    (200,   0, 200),  # magenta
-    (  0, 180, 180),  # olive-yellow
-    (255, 180,   0),  # cyan-ish
-    (128,   0, 255),  # purple
-    (  0, 128, 255),  # orange
-    (  0, 255, 128),  # spring green
+    (0, 210, 255),  # amber-yellow
+    (255, 100, 0),  # blue
+    (50, 220, 50),  # green
+    (0, 60, 255),  # red
+    (200, 0, 200),  # magenta
+    (0, 180, 180),  # olive-yellow
+    (255, 180, 0),  # cyan-ish
+    (128, 0, 255),  # purple
+    (0, 128, 255),  # orange
+    (0, 255, 128),  # spring green
 ]
 
 
@@ -66,6 +66,7 @@ def track_color(track_id: int) -> Tuple[int, int, int]:
 # ---------------------------------------------------------------------------
 # Core drawing helpers
 # ---------------------------------------------------------------------------
+
 
 def draw_trail(
     frame: np.ndarray,
@@ -82,16 +83,16 @@ def draw_trail(
     if t1 <= t0:
         return
 
-    n_pts = max(2, int((t1 - t0) * 40))          # ~40 pts/s resolution
+    n_pts = max(2, int((t1 - t0) * 40))  # ~40 pts/s resolution
     times = np.linspace(t0, t1, n_pts)
     pts = [track.position(t) for t in times]
 
     for i in range(len(pts) - 1):
         # Older segments are more transparent -> darker
-        alpha = (i + 1) / len(pts)               # 0 ... 1 (newest = 1)
+        alpha = (i + 1) / len(pts)  # 0 ... 1 (newest = 1)
         seg_color = tuple(int(c * alpha) for c in color)
 
-        p1 = (int(round(pts[i][0])),     int(round(pts[i][1])))
+        p1 = (int(round(pts[i][0])), int(round(pts[i][1])))
         p2 = (int(round(pts[i + 1][0])), int(round(pts[i + 1][1])))
         cv2.line(frame, p1, p2, seg_color, thickness, cv2.LINE_AA)
 
@@ -118,7 +119,7 @@ def draw_bbox(
     cv2.rectangle(frame, p1, p2, color, thickness, cv2.LINE_AA)
 
     label = f"{track.metadata.class_label} #{track.metadata.track_id}"
-    font       = cv2.FONT_HERSHEY_SIMPLEX
+    font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 0.5
     font_thick = 1
     (tw, th), baseline = cv2.getTextSize(label, font, font_scale, font_thick)
@@ -128,17 +129,21 @@ def draw_bbox(
     bg_p2 = (p1[0] + tw + 4, label_y + baseline)
     cv2.rectangle(frame, bg_p1, bg_p2, color, -1)
     cv2.putText(
-        frame, label,
+        frame,
+        label,
         (p1[0] + 2, label_y),
-        font, font_scale,
+        font,
+        font_scale,
         (255, 255, 255),
-        font_thick, cv2.LINE_AA,
+        font_thick,
+        cv2.LINE_AA,
     )
 
 
 # ---------------------------------------------------------------------------
 # Registry loader
 # ---------------------------------------------------------------------------
+
 
 def load_tracks(registry_path: str, camera_key: str) -> List[CompressedTrack]:
     """Load and deserialize all CompressedTrack objects for a given camera."""
@@ -153,9 +158,12 @@ def load_tracks(registry_path: str, camera_key: str) -> List[CompressedTrack]:
 
     tracks = []
     for entry in registry[camera_key]:
-        compressed = entry.get("compressed_track", entry)   # handle both shapes
+        compressed = entry.get("compressed_track", entry)  # handle both shapes
         if compressed is None:
-            print(f"  [WARN] Skipping entry with null compressed_track (track_id={entry.get('track_id', '?')})", file=sys.stderr)
+            print(
+                f"  [WARN] Skipping entry with null compressed_track (track_id={entry.get('track_id', '?')})",
+                file=sys.stderr,
+            )
             continue
         try:
             track = JsonDeserializer.deserialize_from_dict(compressed)
@@ -172,6 +180,7 @@ def load_tracks(registry_path: str, camera_key: str) -> List[CompressedTrack]:
 # Main rendering loop
 # ---------------------------------------------------------------------------
 
+
 def render(
     registry_path: str,
     video_path: str,
@@ -181,7 +190,7 @@ def render(
     draw_bboxes: bool = True,
     draw_trails: bool = True,
 ) -> None:
-    camera_key = Path(video_path).name          # e.g. "clip1.mp4"
+    camera_key = Path(video_path).name  # e.g. "clip1.mp4"
 
     # Load tracks
     tracks = load_tracks(registry_path, camera_key)
@@ -191,16 +200,16 @@ def render(
     if not cap.isOpened():
         raise IOError(f"Cannot open video: {video_path}")
 
-    fps      = fps_override or cap.get(cv2.CAP_PROP_FPS)
-    width    = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height   = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = fps_override or cap.get(cv2.CAP_PROP_FPS)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     print(f"Video: {width}x{height} @ {fps:.2f} fps  ({n_frames} frames)")
 
     # Setup writer
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out    = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
     frame_idx = 0
     while True:
@@ -214,10 +223,10 @@ def render(
         # Render each active track
         for track in tracks:
             t_start = track.metadata.start_timestamp
-            t_end   = track.metadata.end_timestamp
+            t_end = track.metadata.end_timestamp
 
             if current_t < t_start or current_t >= t_end:
-                continue                                # not active yet / already done
+                continue  # not active yet / already done
 
             color = track_color(track.metadata.track_id)
 
@@ -242,39 +251,50 @@ def render(
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Render compressed tracks onto a video."
-    )
+    parser = argparse.ArgumentParser(description="Render compressed tracks onto a video.")
     parser.add_argument(
-        "--registry", "-r", required=True,
+        "--registry",
+        "-r",
+        required=True,
         help="Path to the registry JSON file (e.g. temp.json).",
     )
     parser.add_argument(
-        "--video", "-v", required=True,
+        "--video",
+        "-v",
+        required=True,
         help="Path to the input video file.",
     )
     parser.add_argument(
-        "--output", "-o", default=None,
+        "--output",
+        "-o",
+        default=None,
         help=(
-            "Path for the output video. "
-            "Defaults to '<input_stem>_tracks.mp4' next to the input."
+            "Path for the output video. Defaults to '<input_stem>_tracks.mp4' next to the input."
         ),
     )
     parser.add_argument(
-        "--trail-duration", "-t", type=float, default=3.0,
+        "--trail-duration",
+        "-t",
+        type=float,
+        default=3.0,
         help="Duration (seconds) of trailing path shown behind the current position. Default: 3.",
     )
     parser.add_argument(
-        "--fps-override", type=float, default=None,
+        "--fps-override",
+        type=float,
+        default=None,
         help="Override the FPS detected from the video metadata.",
     )
     parser.add_argument(
-        "--use-bbox", action="store_true",
+        "--use-bbox",
+        action="store_true",
         help="Draw bounding boxes along with the tracks (default: show tracks/trails only).",
     )
     parser.add_argument(
-        "--no-trail", action="store_true",
+        "--no-trail",
+        action="store_true",
         help="Disable trail rendering (show bounding box only).",
     )
     return parser.parse_args()
@@ -291,13 +311,13 @@ def main() -> None:
         output_path = str(p.with_stem(p.stem + "_tracks"))
 
     render(
-        registry_path   = args.registry,
-        video_path      = video_path,
-        output_path     = output_path,
-        trail_duration  = args.trail_duration,
-        fps_override    = args.fps_override,
-        draw_bboxes     = args.use_bbox,
-        draw_trails     = not args.no_trail,
+        registry_path=args.registry,
+        video_path=video_path,
+        output_path=output_path,
+        trail_duration=args.trail_duration,
+        fps_override=args.fps_override,
+        draw_bboxes=args.use_bbox,
+        draw_trails=not args.no_trail,
     )
 
 

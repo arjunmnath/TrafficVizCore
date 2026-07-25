@@ -169,4 +169,3 @@ def resolve_model_weights(model_path: str) -> str:
 
     # Fallback to the join of workspace_root and trained_model/model_path
     return os.path.abspath(os.path.join(workspace_root, "trained_model", model_path))
-

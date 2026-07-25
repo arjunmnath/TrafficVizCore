@@ -206,9 +206,7 @@ class RichUIListener(ReIDPipelineListener):
     def on_pipeline_end(self, registries: Dict[str, SimpleRegistry], output_path: str):
         self.stop_keyboard_listener()
         summary = {feed_name: reg.get_results_summary() for feed_name, reg in registries.items()}
-        console.print(
-            f"\n[bold yellow]Saving registry to:[/bold yellow] {output_path}"
-        )
+        console.print(f"\n[bold yellow]Saving registry to:[/bold yellow] {output_path}")
 
         console.print("\n")
         console.print(

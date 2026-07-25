@@ -109,9 +109,14 @@ def process_video_crops(
             best_frame, best_time, best_bbox, best_score = get_cleared_detection_frame(
                 track, lambda_param=lambda_param
             )
-            frame_to_tracks.setdefault(best_frame, []).append((track.metadata.track_id, best_bbox, best_score))
+            frame_to_tracks.setdefault(best_frame, []).append(
+                (track.metadata.track_id, best_bbox, best_score)
+            )
         except Exception as exc:
-            print(f"[ERROR] Could not evaluate cleared frame for track {track.metadata.track_id}: {exc}", file=sys.stderr)
+            print(
+                f"[ERROR] Could not evaluate cleared frame for track {track.metadata.track_id}: {exc}",
+                file=sys.stderr,
+            )
 
     if not frame_to_tracks:
         print(f"No valid frames to crop for video '{video_key}'")
@@ -135,7 +140,10 @@ def process_video_crops(
 
     for target_frame in target_frames:
         if target_frame < 0 or target_frame >= total_frames:
-            print(f"[WARN] Requested frame {target_frame} is out of video bounds [0, {total_frames})", file=sys.stderr)
+            print(
+                f"[WARN] Requested frame {target_frame} is out of video bounds [0, {total_frames})",
+                file=sys.stderr,
+            )
             continue
 
         cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
@@ -154,16 +162,19 @@ def process_video_crops(
             iy2 = max(0, min(height, int(round(y2))))
 
             if ix2 <= ix1 or iy2 <= iy1:
-                print(f"[WARN] Crop bbox for track {track_id} is empty/out of frame boundaries", file=sys.stderr)
+                print(
+                    f"[WARN] Crop bbox for track {track_id} is empty/out of frame boundaries",
+                    file=sys.stderr,
+                )
                 continue
 
             crop = frame[iy1:iy2, ix1:ix2]
-            
+
             # Format output file name: {video_base}_track_{track_id}.jpg
             video_base = Path(video_key).stem
             out_filename = f"{video_base}_track_{track_id}.jpg"
             out_path = os.path.join(output_dir, out_filename)
-            
+
             cv2.imwrite(out_path, crop)
             success_count += 1
 
@@ -187,7 +198,7 @@ def main():
     for video_key, tracks in video_to_tracks.items():
         # Resolve video path
         video_path = os.path.join(args.video_dir, video_key)
-        
+
         # If not found directly, try matching by searching files in video-dir
         if not os.path.exists(video_path):
             # Try checking the current directory

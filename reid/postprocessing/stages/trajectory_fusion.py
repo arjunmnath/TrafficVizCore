@@ -39,7 +39,9 @@ def mean_fusion(embeddings: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
     return _l2_normalize(embeddings.mean(axis=0))
 
 
-def attention_fusion(embeddings: np.ndarray[Any, Any], temperature: float = 1.0) -> np.ndarray[Any, Any]:
+def attention_fusion(
+    embeddings: np.ndarray[Any, Any], temperature: float = 1.0
+) -> np.ndarray[Any, Any]:
     """Aggregate embeddings via scaled dot-product self-attention.
 
     Each frame embedding attends over all others to produce a context-weighted
@@ -146,7 +148,4 @@ class TrajectoryFusionStage(PostProcessingStage):
         return track
 
     def __repr__(self) -> str:
-        return (
-            f"TrajectoryFusionStage(mode={self.mode!r}, "
-            f"temperature={self.temperature})"
-        )
+        return f"TrajectoryFusionStage(mode={self.mode!r}, temperature={self.temperature})"

@@ -11,7 +11,9 @@ from .tracker_factory import TrackerFactory
 class Detections:
     """Mock detections object compatible with Ultralytics tracker requirements."""
 
-    def __init__(self, xywh: np.ndarray[Any, Any], conf: np.ndarray[Any, Any], cls: np.ndarray[Any, Any]):
+    def __init__(
+        self, xywh: np.ndarray[Any, Any], conf: np.ndarray[Any, Any], cls: np.ndarray[Any, Any]
+    ):
         """Initialize mock detections.
 
         Args:
@@ -71,11 +73,15 @@ class Tracker:
         self._hook_wired = False
 
         # Subscribe to tracker lifecycle events if enabled and supported
-        if getattr(self.args, "lifecycle_events_enabled", True) and hasattr(self.tracker, "subscribe"):
+        if getattr(self.args, "lifecycle_events_enabled", True) and hasattr(
+            self.tracker, "subscribe"
+        ):
             setattr(self.tracker, "subscribe", getattr(self.tracker, "subscribe"))
             self.tracker.subscribe(self._handle_tracker_event)
 
-    def _handle_tracker_event(self, event_type: str, track_id: int, frame_count: int, timestamp: float, track: Any) -> None:
+    def _handle_tracker_event(
+        self, event_type: str, track_id: int, frame_count: int, timestamp: float, track: Any
+    ) -> None:
         """Handle incoming tracker lifecycle events to update internal buffers."""
         if event_type in ("created", "updated", "recalled"):
             bbox = track.xyxy.tolist()  # [x1, y1, x2, y2]
@@ -150,7 +156,9 @@ class Tracker:
                         [x1, y1, x2, y2, track_id, score, class_id, detection_idx]
         """
         prev_removed_ids = {t.track_id for t in getattr(self.tracker, "removed_stracks", [])}
-        events_enabled = getattr(self.args, "lifecycle_events_enabled", True) and hasattr(self.tracker, "subscribe")
+        events_enabled = getattr(self.args, "lifecycle_events_enabled", True) and hasattr(
+            self.tracker, "subscribe"
+        )
 
         if len(boxes) == 0:
             # Handle frame with zero detections
@@ -160,7 +168,9 @@ class Tracker:
                 cls=np.empty((0,), dtype=np.int32),
             )
             if events_enabled:
-                tracks = self.tracker.update(empty_detections, feats=np.empty((0, 0)), timestamp=timestamp)
+                tracks = self.tracker.update(
+                    empty_detections, feats=np.empty((0, 0)), timestamp=timestamp
+                )
             else:
                 tracks = self.tracker.update(empty_detections, feats=np.empty((0, 0)))
         else:

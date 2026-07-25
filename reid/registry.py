@@ -57,7 +57,9 @@ class SimpleRegistry:
 
         return local_track_id
 
-    def add_compressed_track(self, local_track_id: int, compressed_track_dict: Dict[str, Any]) -> None:
+    def add_compressed_track(
+        self, local_track_id: int, compressed_track_dict: Dict[str, Any]
+    ) -> None:
         """Associate a serialized compressed track representation with the identity."""
         if local_track_id not in self.identities:
             self.identities[local_track_id] = {
