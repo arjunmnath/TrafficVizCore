@@ -174,6 +174,20 @@ camera-1:
   command: ["--camera_id", "cam_1", "--video_source", "/app/videos/feed1.mp4", ...]
 ```
 
+## System Evaluation & Benchmarking
+
+Evaluate end-to-end tracking and ReID performance (Rank-1, mAP, mINP, IDF1, HOTA, DetA, AssA) against ground truth annotations on **Scene 6 (`dataset/test/S06`)**:
+
+```bash
+# Run system evaluation with GPU acceleration:
+PYTHONPATH=. poetry run python scripts/evaluate_system.py --device auto
+
+# Save detailed JSON and text summary reports:
+PYTHONPATH=. poetry run python scripts/evaluate_system.py \
+    --output_json artifacts/eval_results.json \
+    --output_txt artifacts/eval_results.txt
+```
+
 ## Project Structure
 
 ```

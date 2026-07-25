@@ -328,7 +328,7 @@ def extract_reid_crops(
         )
 
         header_text = Text(
-            "DMT ReID Crop Extractor",
+            "ReID Crop Extractor",
             style="bold white on magenta",
             justify="center",
         )

@@ -214,7 +214,7 @@ class RichUIListener(ReIDPipelineListener):
         console.print(
             Panel(
                 Text(
-                    "DMT RE-IDENTIFICATION FINAL MATCHING REPORT",
+                    "RE-IDENTIFICATION FINAL MATCHING REPORT",
                     style="bold white on blue",
                     justify="center",
                 ),
@@ -293,7 +293,7 @@ class RichUIListener(ReIDPipelineListener):
 
         # Header Panel
         header_text = Text.assemble(
-            ("DMT Multi-Camera ReID Pipeline Test Runner", "bold magenta"),
+            ("Multi-Camera ReID Pipeline Test Runner", "bold magenta"),
             "  |  ",
             (f"Active Video {video_idx}/{num_videos}: {video_name}", "cyan"),
         )
@@ -592,7 +592,7 @@ class HeadlessUIListener(ReIDPipelineListener):
         print(f"[{time.strftime('%H:%M:%S')}] Saving registry to: {output_path}")
 
         print("\n=============================================")
-        print("DMT RE-IDENTIFICATION FINAL MATCHING REPORT")
+        print("RE-IDENTIFICATION FINAL MATCHING REPORT")
         print("=============================================")
         total_identities = sum(len(reg.identities) for reg in registries.values())
         print(f"Total Unique Identities: {total_identities}")

@@ -68,7 +68,7 @@ def export_results(registries: dict, output_path: str) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Test ReID on two videos using DMT backbone")
+    parser = argparse.ArgumentParser(description="Test ReID on two videos using deep ReID ensemble")
     parser.add_argument("--video1", type=str, required=True, help="Path to first video file")
     parser.add_argument("--video2", type=str, required=True, help="Path to second video file")
     parser.add_argument(
