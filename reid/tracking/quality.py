@@ -44,9 +44,8 @@ class TrackQuality:
         max_consec = getattr(track, "max_consecutive_associations", 1)
         consec_score = float(min(1.0, max_consec / 50.0))
 
-        occlusion_count = getattr(track, "occlusion_count", 0)
         recall_count = getattr(track, "recall_count", 0)
-        penalty = 0.05 * occlusion_count + 0.02 * recall_count
+        penalty = 0.02 * recall_count
 
         consistency_score = float(max(0.0, consec_score - penalty))
 

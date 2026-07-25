@@ -167,3 +167,167 @@ class CompressedTrack:
         if speed < 1e-6:
             return 0.0
         return abs(vx * ay - vy * ax) / (speed**3)
+
+
+def get_cleared_detection_frame(
+    track: Any,
+    lambda_param: float = 1.0,
+    dt: float = 1e-3,
+) -> Tuple[int, float, Tuple[float, float, float, float], float]:
+    """Finds the optimal 'cleared' detection frame from a track.
+
+    Uses a differential heuristic on the height (h) and width (w) model of the track
+    to penalize rapid/unstable size changes, while maximizing the bounding box area.
+
+    Score formula:
+        Score = Area / (1.0 + lambda_param * (|dw/dt| + |dh/dt|))
+
+    Args:
+        track: The track object. Supports CompressedTrack, TerminatedTrack,
+               or any object that has a 'compressed_track' or 'history' attribute/dict.
+        lambda_param: Sensitivity parameter weighting the derivative penalty.
+        dt: The time delta used for numerical differentiation (in seconds).
+
+    Returns:
+        Tuple of (best_frame_id, best_timestamp, best_bbox, best_score)
+        where best_bbox is (x1, y1, x2, y2).
+    """
+    actual_track = track
+    if hasattr(track, "compressed_track") and track.compressed_track is not None:
+        actual_track = track.compressed_track
+
+    if isinstance(actual_track, CompressedTrack):
+        timestamps = actual_track.time_model.timestamps
+        frames = actual_track.time_model.frames
+
+        best_frame = None
+        best_time = None
+        best_bbox = None
+        best_score = -1.0
+
+        for frame, t in zip(frames, timestamps):
+            w = actual_track.width(t)
+            h = actual_track.height(t)
+            area = w * h
+
+            # Compute numerical derivative using central difference
+            t0 = actual_track.metadata.start_timestamp
+            t1 = actual_track.metadata.end_timestamp
+
+            t_plus = min(t1, t + dt)
+            t_minus = max(t0, t - dt)
+
+            denom = t_plus - t_minus
+            if denom > 1e-6:
+                dw = (actual_track.width(t_plus) - actual_track.width(t_minus)) / denom
+                dh = (actual_track.height(t_plus) - actual_track.height(t_minus)) / denom
+            else:
+                dw = 0.0
+                dh = 0.0
+
+            dA_dt = dw * h + w * dh
+            score = area / (1.0 + lambda_param * abs(dA_dt))
+
+            if score > best_score:
+                best_score = score
+                best_frame = frame
+                best_time = t
+                cx, cy = actual_track.position(t)
+                x1 = cx - w / 2.0
+                y1 = cy - h / 2.0
+                x2 = cx + w / 2.0
+                y2 = cy + h / 2.0
+                best_bbox = (x1, y1, x2, y2)
+
+        if best_frame is None:
+            raise ValueError("CompressedTrack has no frames or timestamps.")
+
+        return best_frame, best_time, best_bbox, best_score
+
+    # Fallback to history sequence format (e.g. dict or object with frames, timestamps, bboxes)
+    frames = None
+    timestamps = None
+    bboxes = None
+
+    history = getattr(actual_track, "history", None)
+    if history is None and isinstance(actual_track, dict):
+        history = actual_track
+
+    if isinstance(history, dict):
+        frames = history.get("frames", [])
+        timestamps = history.get("timestamps", [])
+        bboxes = history.get("bboxes", [])
+    elif hasattr(actual_track, "frames") and hasattr(actual_track, "timestamps") and hasattr(actual_track, "bboxes"):
+        frames = getattr(actual_track, "frames")
+        timestamps = getattr(actual_track, "timestamps")
+        bboxes = getattr(actual_track, "bboxes")
+
+    if not frames or not timestamps or not bboxes or len(frames) != len(timestamps) or len(frames) != len(bboxes):
+        raise ValueError("Track lacks standard frame, timestamp, or bounding box history.")
+
+    n = len(timestamps)
+    best_frame = None
+    best_time = None
+    best_bbox = None
+    best_score = -1.0
+
+    for i in range(n):
+        frame = frames[i]
+        t = timestamps[i]
+        bbox = bboxes[i]
+        x1, y1, x2, y2 = bbox
+        w = x2 - x1
+        h = y2 - y1
+        area = w * h
+
+        if n < 2:
+            dw = 0.0
+            dh = 0.0
+        else:
+            if i == 0:
+                dt_diff = timestamps[1] - timestamps[0]
+                if dt_diff > 1e-6:
+                    w_next = bboxes[1][2] - bboxes[1][0]
+                    h_next = bboxes[1][3] - bboxes[1][1]
+                    dw = (w_next - w) / dt_diff
+                    dh = (h_next - h) / dt_diff
+                else:
+                    dw = 0.0
+                    dh = 0.0
+            elif i == n - 1:
+                dt_diff = timestamps[-1] - timestamps[-2]
+                if dt_diff > 1e-6:
+                    w_prev = bboxes[-2][2] - bboxes[-2][0]
+                    h_prev = bboxes[-2][3] - bboxes[-2][1]
+                    dw = (w - w_prev) / dt_diff
+                    dh = (h - h_prev) / dt_diff
+                else:
+                    dw = 0.0
+                    dh = 0.0
+            else:
+                dt_diff = timestamps[i + 1] - timestamps[i - 1]
+                if dt_diff > 1e-6:
+                    w_next = bboxes[i + 1][2] - bboxes[i + 1][0]
+                    w_prev = bboxes[i - 1][2] - bboxes[i - 1][0]
+                    h_next = bboxes[i + 1][3] - bboxes[i + 1][1]
+                    h_prev = bboxes[i - 1][3] - bboxes[i - 1][1]
+                    dw = (w_next - w_prev) / dt_diff
+                    dh = (h_next - h_prev) / dt_diff
+                else:
+                    dw = 0.0
+                    dh = 0.0
+
+        dA_dt = dw * h + w * dh
+        score = area / (1.0 + lambda_param * abs(dA_dt))
+
+        if score > best_score:
+            best_score = score
+            best_frame = frame
+            best_time = t
+            best_bbox = tuple(bbox)
+
+    if best_frame is None:
+        raise ValueError("No frames found in track history.")
+
+    return best_frame, best_time, best_bbox, best_score
+

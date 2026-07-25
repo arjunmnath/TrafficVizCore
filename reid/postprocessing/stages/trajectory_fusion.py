@@ -140,8 +140,6 @@ class TrajectoryFusionStage(PostProcessingStage):
 
         if self.mode == "mean":
             track.fused_embedding = mean_fusion(embeddings)
-            with open("track.fused_embedding", "a") as f:
-                f.write(str(track.track_id) + ": " + np.linalg.norm(track.fused_embedding).__repr__() + "\n")
         else:
             track.fused_embedding = attention_fusion(embeddings, self.temperature)
 

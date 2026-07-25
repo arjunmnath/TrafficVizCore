@@ -13,12 +13,6 @@ fuse_score: True # (bool) Fuse detection score with motion/IoU for matching; sta
 iou_weight: .75 # (float) Weight for Intersection over Union (IoU) cost matrix
 appearance_weight: .25 # (float) Weight for Appearance (ReID feature cosine distance) cost matrix
 
-# Occlusion manager configuration
-occlusion_enabled: True
-occlusion_timeout: 30
-occlusion_similarity_threshold: 0.5
-occlusion_spatial_threshold: 0.1
-
 # Track quality estimation configuration
 quality_enabled: True
 quality_weights:

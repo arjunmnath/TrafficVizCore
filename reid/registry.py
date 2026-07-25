@@ -68,6 +68,25 @@ class SimpleRegistry:
             }
         self.identities[local_track_id]["compressed_track"] = compressed_track_dict
 
+    def merge_tracks(self, primary_track_id: int, secondary_track_id: int) -> None:
+        """Consolidate secondary_track_id into primary_track_id.
+
+        Merges appearance_embeddings and updates compressed_track, removing secondary_track_id.
+        """
+        if secondary_track_id not in self.identities:
+            return
+
+        if primary_track_id not in self.identities:
+            self.identities[primary_track_id] = self.identities.pop(secondary_track_id)
+            return
+
+        primary = self.identities[primary_track_id]
+        secondary = self.identities.pop(secondary_track_id)
+
+        primary["appearance_embeddings"].extend(secondary.get("appearance_embeddings", []))
+        if secondary.get("compressed_track") is not None:
+            primary["compressed_track"] = secondary["compressed_track"]
+
     def get_results_summary(self) -> List[Dict[str, Any]]:
         """Return a JSON-serialisable summary of all track identities and their compressed track details."""
         return [

@@ -16,8 +16,8 @@ Usage
         --output   output_clip1.mp4 \
         [--trail-duration 3.0]   # seconds of trail to show (default 3 s)
         [--fps-override 30]      # override detected FPS (optional)
-        [--no-bbox]              # skip bounding box (show trail only)
-        [--no-trail]             # skip trail (show bbox only)
+        [--use-bbox]             # draw bounding box along with the tracks
+        [--no-trail]             # skip trail (show bbox only, requires --use-bbox)
 """
 
 import argparse
@@ -270,8 +270,8 @@ def parse_args() -> argparse.Namespace:
         help="Override the FPS detected from the video metadata.",
     )
     parser.add_argument(
-        "--no-bbox", action="store_true",
-        help="Disable bounding-box rendering (show trail only).",
+        "--use-bbox", action="store_true",
+        help="Draw bounding boxes along with the tracks (default: show tracks/trails only).",
     )
     parser.add_argument(
         "--no-trail", action="store_true",
@@ -296,7 +296,7 @@ def main() -> None:
         output_path     = output_path,
         trail_duration  = args.trail_duration,
         fps_override    = args.fps_override,
-        draw_bboxes     = not args.no_bbox,
+        draw_bboxes     = args.use_bbox,
         draw_trails     = not args.no_trail,
     )
 

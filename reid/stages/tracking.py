@@ -41,6 +41,10 @@ class TrackingStage(PipelineStage):
         postprocessing_pipeline = self.postprocessing_pipeline
 
         def _on_terminated(track: Any) -> None:
+            # Skip unconfirmed/non-activated tracks to prevent registry pollution
+            if not getattr(track, "is_activated", False):
+                return
+
             # Resolve class label from track history if available
             class_label = "unknown"
             feed_name = ""
@@ -90,11 +94,16 @@ class TrackingStage(PipelineStage):
             track.postprocessed = terminated
 
             if hasattr(pipeline, "registry") and pipeline.registry is not None:
+                master_id = getattr(terminated, "master_track_id", None)
+                target_id = master_id if master_id is not None else track.track_id
+                if master_id is not None and master_id != track.track_id:
+                    pipeline.registry.merge_tracks(master_id, track.track_id)
+
                 compressed_track = getattr(terminated, "compressed_track", None)
                 if compressed_track is not None:
                     from tracking.serialization import JsonSerializer
                     serialized_dict = JsonSerializer.serialize_to_dict(compressed_track)
-                    pipeline.registry.add_compressed_track(track.track_id, serialized_dict)
+                    pipeline.registry.add_compressed_track(target_id, serialized_dict)
 
             # Notify ReIDBufferStage of track termination
             from reid.stages.buffer import ReIDBufferStage
@@ -151,6 +160,17 @@ class TrackingStage(PipelineStage):
             timestamp=data.timestamp,
         )
         data.tracks = tracks
+
+        if hasattr(pipeline, "recorded_predictions") and pipeline.recorded_predictions is not None:
+            for t in tracks:
+                bbox = t[0:4].tolist()  # [x1, y1, x2, y2]
+                track_id = int(t[4])
+                pipeline.recorded_predictions.append({
+                    "feed": data.feed_name,
+                    "frame": data.frame_count,
+                    "track_id": track_id,
+                    "bbox": bbox,
+                })
 
         listener = data.listener
 

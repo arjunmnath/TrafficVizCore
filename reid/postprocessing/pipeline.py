@@ -49,6 +49,9 @@ class TerminatedTrack:
     # Set by TrajectoryCompressionStage
     compressed_track: Optional[CompressedTrack] = None
 
+    # Set by IntraCameraTrajectoryFusionStage (points to primary master track_id if fused)
+    master_track_id: Optional[int] = None
+
     # Open-ended store for stage outputs
     extra: Dict[str, Any] = field(default_factory=dict)
 

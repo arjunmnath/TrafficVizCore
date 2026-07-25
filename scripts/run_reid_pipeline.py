@@ -28,6 +28,7 @@ from reid.postprocessing import (
     PostProcessingPipeline,
     TrajectoryFusionStage,
     TrajectoryCompressionStage,
+    IntraCameraTrajectoryFusionStage,
 )
 
 from reid.stages import (
@@ -128,6 +129,13 @@ def main():
         "'none' = disable postprocessing",
     )
 
+    parser.add_argument(
+        "--enable-intra-camera-fusion",
+        action="store_true",
+        default=True,
+        help="Enable intra-camera trajectory fusion stage to merge fragmented tracks",
+    )
+
     args = parser.parse_args()
 
     # Resolve paths
@@ -161,6 +169,7 @@ def main():
         "Ensemble Model Dir": model_dir,
         "YOLO Tracker": args.tracker,
         "FP16 Enabled": str(args.fp16),
+        "Intra-Camera Fusion": str(args.enable_intra_camera_fusion),
     }
 
     listener.show_configuration(config_data)
@@ -173,8 +182,11 @@ def main():
     # Build postprocessing pipeline
     postprocessing_stages = [
         TrajectoryFusionStage(mode=args.fusion_mode),
-        TrajectoryCompressionStage()
+        TrajectoryCompressionStage(),
     ]
+    if args.enable_intra_camera_fusion:
+        postprocessing_stages.append(IntraCameraTrajectoryFusionStage(fusion_mode=args.fusion_mode))
+
     postprocessing_pipeline = PostProcessingPipeline(postprocessing_stages)
 
     stages = [

@@ -4,7 +4,6 @@ from typing import Any, List
 from ultralytics.trackers.utils.kalman_filter import KalmanFilterXYAH
 from ultralytics.trackers.basetrack import TrackState
 from reid.tracking.enhanced_bytetrack import EnhancedSTrack, EnhancedByteTracker
-from reid.tracking.occlusion import OcclusionManager, bbox_iou
 from reid.tracking.quality import TrackQuality
 from reid.tracking.tracker import Tracker, Detections
 
@@ -22,10 +21,6 @@ class MockArgs:
         self.fuse_score = True
         self.iou_weight = 0.7
         self.appearance_weight = 0.3
-        self.occlusion_enabled = True
-        self.occlusion_timeout = 5
-        self.occlusion_similarity_threshold = 0.6
-        self.occlusion_spatial_threshold = 0.1
         self.quality_enabled = True
         self.quality_weights = {
             "detector_confidence": 0.3,
@@ -36,77 +31,7 @@ class MockArgs:
         self.lifecycle_events_enabled = True
 
 
-def test_bbox_iou() -> None:
-    box1 = np.array([10, 10, 20, 20])
-    box2 = np.array([15, 10, 25, 20])
-    # Intersection: [15, 10, 20, 20] -> width 5, height 10 -> area 50
-    # Box1 area: 100, Box2 area: 100. Union: 100 + 100 - 50 = 150
-    # IoU: 50 / 150 = 0.3333
-    assert abs(bbox_iou(box1, box2) - 0.333333) < 1e-4
 
-    box_disjoint = np.array([30, 30, 40, 40])
-    assert bbox_iou(box1, box_disjoint) == 0.0
-
-
-def test_occlusion_manager_cleanup() -> None:
-    mgr = OcclusionManager(timeout=3, similarity_threshold=0.5, spatial_threshold=0.1)
-
-    # Mock track objects
-    class MockTrack:
-        def __init__(self, track_id: int, end_frame: int, cls: int) -> None:
-            self.track_id = track_id
-            self.end_frame = end_frame
-            self.cls = cls
-
-    t1 = MockTrack(track_id=1, end_frame=10, cls=0)
-    t2 = MockTrack(track_id=2, end_frame=12, cls=0)
-
-    mgr.add_lost_track(t1)
-    mgr.add_lost_track(t2)
-
-    assert len(mgr.lost_tracks) == 2
-
-    # Cleanup at frame 14.
-    # t1: 14 - 10 = 4 > 3 -> evicted
-    # t2: 14 - 12 = 2 <= 3 -> kept
-    mgr.cleanup(14)
-    assert len(mgr.lost_tracks) == 1
-    assert 2 in mgr.lost_tracks
-    assert 1 not in mgr.lost_tracks
-
-
-def test_occlusion_manager_query() -> None:
-    mgr = OcclusionManager(timeout=5, similarity_threshold=0.6, spatial_threshold=0.1)
-
-    # Setup lost tracks
-    feat_t1 = np.array([1.0, 0.0])
-    t1 = EnhancedSTrack(np.array([100, 100, 50, 50, 0]), 0.9, 0, feat_t1)
-    t1.track_id = 42
-    t1.frame_id = 10
-
-    mgr.add_lost_track(t1)
-
-    # Query track that matches
-    feat_q1 = np.array([0.9, 0.1])
-    q1 = EnhancedSTrack(np.array([102, 102, 50, 50, 0]), 0.9, 0, feat_q1)
-
-    # Query with mismatching class
-    q_wrong_cls = EnhancedSTrack(np.array([102, 102, 50, 50, 0]), 0.9, 1, feat_q1)
-
-    # Query with low similarity
-    feat_low_sim = np.array([0.0, 1.0])
-    q_low_sim = EnhancedSTrack(np.array([102, 102, 50, 50, 0]), 0.9, 0, feat_low_sim)
-
-    # Query with spatial mismatch
-    q_far = EnhancedSTrack(np.array([300, 300, 50, 50, 0]), 0.9, 0, feat_q1)
-
-    assert len(mgr.query(q1, frame_id=12)) == 1
-    assert len(mgr.query(q_wrong_cls, frame_id=12)) == 0
-    assert len(mgr.query(q_low_sim, frame_id=12)) == 0
-    assert len(mgr.query(q_far, frame_id=12)) == 0
-
-    # Query beyond timeout
-    assert len(mgr.query(q1, frame_id=20)) == 0
 
 
 def test_recall_support() -> None:
@@ -206,19 +131,7 @@ def test_event_dispatcher() -> None:
     assert len(events) == 3
     assert events[2] == ("lost", 1, 3.0)
 
-    # Check track added to OcclusionManager
-    assert 1 in tracker.occlusion_manager.lost_tracks
 
-    # Frame 4: Track Recalled (fails normal association, but passes occlusion spatial gating)
-    results_recalled = Detections(
-        xywh=np.array([[127.0, 102.0, 50.0, 50.0, 0.0]]),
-        conf=np.array([0.95]),
-        cls=np.array([0]),
-    )
-    tracker.update(results_recalled, feats=feat2, timestamp=4.0)
-    # The track should be recalled from occlusion manager
-    assert len(events) == 4
-    assert events[3] == ("recalled", 1, 4.0)
 
 
 def test_tracker_wrapper_event_wiring() -> None:
@@ -233,10 +146,6 @@ def test_tracker_wrapper_event_wiring() -> None:
         "fuse_score": True,
         "iou_weight": 0.7,
         "appearance_weight": 0.3,
-        "occlusion_enabled": True,
-        "occlusion_timeout": 30,
-        "occlusion_similarity_threshold": 0.5,
-        "occlusion_spatial_threshold": 0.1,
         "quality_enabled": True,
         "quality_weights": {
             "detector_confidence": 0.3,
@@ -279,3 +188,65 @@ def test_tracker_wrapper_event_wiring() -> None:
     assert 1 in terminated_ids
     assert 1 not in t_wrapper.track_history
     assert 1 not in t_wrapper.track_embeddings
+
+
+def test_tracking_stage_unconfirmed_ignored() -> None:
+    from reid.stages.tracking import TrackingStage
+    from reid.postprocessing.pipeline import PostProcessingPipeline
+    from reid.registry import SimpleRegistry
+
+    # Mock pipeline object
+    class MockPipeline:
+        def __init__(self) -> None:
+            self.registry = SimpleRegistry()
+            self.stages = []
+
+    pipeline = MockPipeline()
+
+    class MockStage:
+        def process(self, track: Any) -> Any:
+            from tracking.compression.builder import CompressedTrackBuilder
+            builder = CompressedTrackBuilder()
+            builder.set_metadata(track_id=track.track_id, camera_id="cam1", class_label="car")
+            builder.add_observation(0, 0.0, (10, 10, 20, 20))
+            track.compressed_track = builder.build()
+            return track
+
+    stage = TrackingStage(
+        tracker_config="bytetrack.yaml",
+        postprocessing_pipeline=PostProcessingPipeline([MockStage()]),
+    )
+
+    # Initialize stage
+    stage.initialize()
+    pipeline.stages.append(stage)
+
+    # Wire termination hook
+    stage._wire_termination_hook(pipeline)
+
+    # Mock track objects
+    class MockTrack:
+        def __init__(self, track_id: int, is_activated: bool) -> None:
+            self.track_id = track_id
+            self.is_activated = is_activated
+            self.history = {"bboxes": [[10, 10, 20, 20]], "frames": [1], "timestamps": [1.0]}
+            self.fused_embedding = None
+            self.compressed_track = None
+
+    # Test unconfirmed track
+    unconfirmed = MockTrack(track_id=99, is_activated=False)
+    stage.manual_tracker.on_track_terminated(unconfirmed)
+
+    # Verify unconfirmed track is NOT in registry
+    assert 99 not in pipeline.registry.identities
+
+    # Test confirmed track
+    confirmed = MockTrack(track_id=100, is_activated=True)
+    # Put it in registry frame-by-frame first to mimic normal tracking
+    pipeline.registry.update_track(local_track_id=100, appearance_embedding=np.zeros(2048, dtype=np.float32))
+
+    stage.manual_tracker.on_track_terminated(confirmed)
+
+    # Verify confirmed track IS in registry and has compressed track associated
+    assert 100 in pipeline.registry.identities
+    assert pipeline.registry.identities[100]["compressed_track"] is not None

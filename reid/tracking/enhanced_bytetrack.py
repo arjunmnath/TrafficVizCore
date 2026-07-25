@@ -9,7 +9,6 @@ from ultralytics.trackers.utils.stracks import parse_bboxes
 from .association.base import IoUCost
 from .association.appearance import AppearanceCost
 from .association.fusion import CostFusion
-from .occlusion import OcclusionManager
 from .quality import TrackQuality
 
 
@@ -35,7 +34,6 @@ class EnhancedSTrack(STrack):
         self.num_detections: int = 1
         self.consecutive_associations: int = 1
         self.max_consecutive_associations: int = 1
-        self.occlusion_count: int = 0
         self.recall_count: int = 0
         self.lost_recovered_count: int = 0
         self.embedding_stability_sum: float = 0.0
@@ -144,9 +142,8 @@ class EnhancedSTrack(STrack):
         self.num_detections += 1
 
     def mark_lost(self) -> None:
-        """Mark the track as lost and update occlusion quality metrics."""
+        """Mark the track as lost."""
         super().mark_lost()
-        self.occlusion_count += 1
         self.consecutive_associations = 0
 
     @property
@@ -156,12 +153,12 @@ class EnhancedSTrack(STrack):
 
 
 class EnhancedByteTracker(BYTETracker):
-    """An enhanced ByteTrack tracker incorporating appearance-based association cost, occlusion management, and event-dispatching."""
+    """An enhanced ByteTrack tracker incorporating appearance-based association cost and event-dispatching."""
 
     track_class = EnhancedSTrack
 
     def __init__(self, args: Any):
-        """Initialize custom tracker and its modular cost/fusion/occlusion components.
+        """Initialize custom tracker and its modular cost/fusion components.
 
         Args:
             args (Any): Track settings configuration namespace.
@@ -185,12 +182,6 @@ class EnhancedByteTracker(BYTETracker):
         self.iou_weight = getattr(args, "iou_weight", 0.7)
         self.appearance_weight = getattr(args, "appearance_weight", 0.3)
 
-        # Occlusion configuration
-        self.occlusion_enabled = getattr(args, "occlusion_enabled", True)
-        self.occlusion_timeout = getattr(args, "occlusion_timeout", 30)
-        self.occlusion_similarity_threshold = getattr(args, "occlusion_similarity_threshold", 0.5)
-        self.occlusion_spatial_threshold = getattr(args, "occlusion_spatial_threshold", 0.1)
-
         # Quality configuration
         self.quality_enabled = getattr(args, "quality_enabled", True)
         self.quality_weights = getattr(args, "quality_weights", {
@@ -203,13 +194,6 @@ class EnhancedByteTracker(BYTETracker):
         # Event configuration
         self.lifecycle_events_enabled = getattr(args, "lifecycle_events_enabled", True)
         self._listeners: List[Any] = []
-
-        # Initialize OcclusionManager
-        self.occlusion_manager = OcclusionManager(
-            timeout=self.occlusion_timeout,
-            similarity_threshold=self.occlusion_similarity_threshold,
-            spatial_threshold=self.occlusion_spatial_threshold
-        ) if self.occlusion_enabled else None
 
         # Tracking sets to compute frame transitions
         self._previous_active_ids: Set[int] = set()
@@ -371,60 +355,31 @@ class EnhancedByteTracker(BYTETracker):
         activated: List[STrack],
         refind: List[STrack] | None = None,
     ) -> None:
-        """Activate new tracks or recall recently lost tracks from detections.
+        """Activate new tracks from unmatched detections.
 
         Args:
             u_detection (List[int]): Unmatched detection indices.
             detections (List[STrack]): List of all detections.
             activated (List[STrack]): Active tracks list to append activated tracks.
-            refind (List[STrack], optional): Refind tracks list to append recalled tracks.
+            refind (List[STrack], optional): Refind tracks list.
         """
         for inew in u_detection:
             track = detections[inew]
             if track.score < self.args.new_track_thresh:
                 continue
 
-            recalled = False
-            if getattr(self.args, "occlusion_enabled", True) and self.occlusion_manager is not None:
-                candidates = self.occlusion_manager.query(track, self.frame_id)
-                if candidates:
-                    best_candidate = candidates[0]
-                    # Recall!
-                    if hasattr(best_candidate, "recall"):
-                        best_candidate.recall(track, self.frame_id)
-                    # Add to refind (so it's updated in PERSISTENT tracked list)
-                    if refind is not None:
-                        refind.append(best_candidate)
-                    else:
-                        activated.append(best_candidate)
+            track.activate(self.kalman_filter, self.frame_id)
+            activated.append(track)
 
-                    # Remove from occlusion manager cache
-                    self.occlusion_manager.remove(best_candidate.track_id)
-                    recalled = True
+            self._created_or_recalled_ids_this_frame.add(track.track_id)
 
-                    self._created_or_recalled_ids_this_frame.add(best_candidate.track_id)
-
-                    self.emit_event(
-                        "recalled",
-                        best_candidate.track_id,
-                        self.frame_id,
-                        self.current_timestamp,
-                        best_candidate,
-                    )
-
-            if not recalled:
-                track.activate(self.kalman_filter, self.frame_id)
-                activated.append(track)
-
-                self._created_or_recalled_ids_this_frame.add(track.track_id)
-
-                self.emit_event(
-                    "created",
-                    track.track_id,
-                    self.frame_id,
-                    self.current_timestamp,
-                    track,
-                )
+            self.emit_event(
+                "created",
+                track.track_id,
+                self.frame_id,
+                self.current_timestamp,
+                track,
+            )
 
     def update(
         self,
@@ -445,10 +400,6 @@ class EnhancedByteTracker(BYTETracker):
         """
         self.current_timestamp = kwargs.get("timestamp", 0.0)
         self._created_or_recalled_ids_this_frame = set()
-
-        if getattr(self.args, "occlusion_enabled", True) and self.occlusion_manager is not None:
-            # frame_id will be frame_id + 1 after super().update()
-            self.occlusion_manager.cleanup(self.frame_id + 1)
 
         output = super().update(results, img, feats, **kwargs)
 
@@ -479,8 +430,6 @@ class EnhancedByteTracker(BYTETracker):
                     self.current_timestamp,
                     track,
                 )
-                if getattr(self.args, "occlusion_enabled", True) and self.occlusion_manager is not None:
-                    self.occlusion_manager.add_lost_track(track)
 
         # 3. TrackTerminated: -> Removed
         for track in self.removed_stracks:
@@ -492,8 +441,6 @@ class EnhancedByteTracker(BYTETracker):
                     self.current_timestamp,
                     track,
                 )
-                if getattr(self.args, "occlusion_enabled", True) and self.occlusion_manager is not None:
-                    self.occlusion_manager.remove(track.track_id)
 
         self._previous_active_ids = current_active_ids
         self._previous_removed_ids = current_removed_ids
@@ -501,10 +448,8 @@ class EnhancedByteTracker(BYTETracker):
         return output
 
     def reset(self) -> None:
-        """Reset tracker persistent states and occlusion cache."""
+        """Reset tracker persistent states."""
         super().reset()  # type: ignore[no-untyped-call]
-        if hasattr(self, "occlusion_manager") and self.occlusion_manager is not None:
-            self.occlusion_manager.lost_tracks.clear()
         if hasattr(self, "_previous_active_ids"):
             self._previous_active_ids.clear()
         if hasattr(self, "_previous_removed_ids"):
