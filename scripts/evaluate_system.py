@@ -101,8 +101,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--device",
         type=str,
-        default="cpu",
-        help="Device to run inference on (cpu, cuda, mps)",
+        default="auto",
+        help="Device to run inference on: 'auto' (detects GPU), 'cuda' (NVIDIA GPU), 'mps' (Apple Silicon GPU), or 'cpu'",
     )
     return parser.parse_args()
 
@@ -199,7 +199,7 @@ def run_pipeline_experiment(
     stages = [
         VideoFeederStage(),
         SamplerStage(sample_fps=args.sample_fps, time_based=False),
-        YoloDetectionStage(yolo_path=args.yolo_model),
+        YoloDetectionStage(yolo_path=args.yolo_model, device=args.device),
         feature_stage,
         TrackingStage(
             tracker_config=args.tracker,

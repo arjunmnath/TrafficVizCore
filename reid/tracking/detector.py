@@ -6,11 +6,12 @@ from ultralytics import YOLO
 class Detector:
     """Manual detector wrapper that performs object detection on BGR image frames."""
 
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, device: Optional[str] = None):
         """Initialize the detector model.
 
         Args:
             model_name (str): YOLO model name or path.
+            device (str, optional): Computation device ('cpu', 'cuda', 'mps', 'auto').
         """
         import os
         from reid.utils import resolve_model_weights
@@ -22,6 +23,8 @@ class Detector:
             raise FileNotFoundError(f"YOLO model weight file not found at: {model_name}")
 
         self.model = YOLO(model_name)
+        if device is not None and device != "cpu":
+            self.model.to(device)
 
 
     def detect(

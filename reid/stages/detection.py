@@ -7,19 +7,21 @@ from reid.tracking.detector import Detector
 class YoloDetectionStage(PipelineStage):
     """Stage 1: Performs YOLO detection on the input frame. Owns the Detector model instance."""
 
-    def __init__(self, yolo_path: str):
+    def __init__(self, yolo_path: str, device: str = "cpu"):
         """Constructor.
 
         Args:
             yolo_path (str): Path to YOLO detector weight file (.pt).
+            device (str): Compute device.
         """
         self.yolo_path = yolo_path
+        self.device = device
         self.detector = None
 
     def initialize(self, listener: ReIDPipelineListener = None) -> None:
         if listener:
             listener.on_init_status("Loading YOLOv8 Detector model weights...")
-        self.detector = Detector(self.yolo_path)
+        self.detector = Detector(self.yolo_path, device=self.device)
 
     def process(self, data: FrameData, pipeline: Any) -> FrameData:
         if data.skip or data.end_of_stream:
