@@ -22,6 +22,15 @@ class Detector:
         if not os.path.exists(model_name):
             raise FileNotFoundError(f"YOLO model weight file not found at: {model_name}")
 
+        if device == "auto":
+            import torch
+            if torch.cuda.is_available():
+                device = "cuda"
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                device = "mps"
+            else:
+                device = "cpu"
+
         self.model = YOLO(model_name)
         if device is not None and device != "cpu":
             self.model.to(device)
