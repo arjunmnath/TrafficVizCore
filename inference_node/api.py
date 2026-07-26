@@ -3,27 +3,26 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from inference_node.agentic_pipeline import AgenticPlannerPipeline
+from inference_node.retrieval.vector_store import VectorStore
 from shared.schemas import QueryRequest, QueryResponse
 from shared.utils import setup_logger
-from inference_node.rag_pipeline import RAGPipeline
-from inference_node.retrieval.vector_store import VectorStore
-
 
 logger = setup_logger("InferenceAPI")
 
-_pipeline: RAGPipeline | None = None
+_pipeline: AgenticPlannerPipeline | None = None
 _vector_store: VectorStore | None = None
 
 
-def create_app(pipeline: RAGPipeline, vector_store: VectorStore) -> FastAPI:
+def create_app(pipeline: AgenticPlannerPipeline, vector_store: VectorStore) -> FastAPI:
     global _pipeline, _vector_store
     _pipeline = pipeline
     _vector_store = vector_store
 
     app = FastAPI(
-        title="CCTV Inference Node",
-        description="Text-to-timestamp CCTV footage search using semantic retrieval and visual reasoning",
-        version="2.0.0",
+        title="CCTV Agentic Inference Node",
+        description="Text-to-timestamp CCTV search using an Agentic Planning VLM with perception tools",
+        version="3.0.0",
     )
 
     app.add_middleware(
@@ -47,14 +46,11 @@ def create_app(pipeline: RAGPipeline, vector_store: VectorStore) -> FastAPI:
 
     @app.post("/query", response_model=QueryResponse)
     async def query(request: QueryRequest):
-        """Search CCTV footage by natural language description.
-
-        Returns ranked timestamps with VLM-scored confidence and thumbnails.
-        """
+        """Search CCTV footage by natural language query via Agentic Planning VLM."""
         if _pipeline is None:
             return QueryResponse(query=request.query, results=[])
 
-        logger.info(f"Query: '{request.query}' (top_k={request.top_k})")
+        logger.info(f"Agentic Query: '{request.query}' (top_k={request.top_k})")
 
         results = _pipeline.query(
             query_text=request.query,
@@ -62,7 +58,7 @@ def create_app(pipeline: RAGPipeline, vector_store: VectorStore) -> FastAPI:
             camera_id=request.camera_id,
         )
 
-        logger.info(f"Returning {len(results)} results")
+        logger.info(f"Returning {len(results)} agentic results")
         return QueryResponse(query=request.query, results=results)
 
     return app

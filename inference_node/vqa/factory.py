@@ -1,32 +1,43 @@
-"""Factory for instantiating VQA reasoning adapters."""
+"""Factory for instantiating Agentic VLM reasoning adapters."""
 
 from __future__ import annotations
 
-from inference_node.vqa.base import BaseVQAReasoner
+from inference_node.vqa.base import BaseAgenticVLMReasoner
 
 
-def get_vqa_reasoner(model_name: str, device: str = "auto") -> BaseVQAReasoner:
-    """Factory to resolve a model name to its respective VQA Reasoner adapter.
+def get_vqa_reasoner(model_name: str, device: str = "auto") -> BaseAgenticVLMReasoner:
+    """Factory to resolve a model name to its respective Agentic VLM Reasoner adapter.
 
     Args:
-        model_name: Name/path of the model (e.g. microsoft/Florence-2-base-ft,
-          Qwen/Qwen2-VL-2B-Instruct)
-        device: Device to load the model on ("auto", "cuda", "mps", "cpu")
+        model_name: Name of the model:
+          - API models: 'openai-5.6', 'gpt-4o', 'gemini-2.5-flash', 'gemini-1.5-pro'
+          - On-device models: 'Qwen/Qwen3-VL-8B-Instruct', 'Qwen/Qwen2.5-VL-7B-Instruct'
+        device: Device to load local models on ("auto", "cuda", "mps", "cpu")
 
     Returns:
-        An instance of BaseVQAReasoner
+        An instance of BaseAgenticVLMReasoner
     """
     model_name_lower = model_name.lower()
-    if "florence" in model_name_lower:
-        from inference_node.vqa.florence import FlorenceReasoner
 
-        return FlorenceReasoner(model_name=model_name, device=device)
+    if "openai" in model_name_lower or "gpt" in model_name_lower:
+        from inference_node.vqa.openai_reasoner import OpenAIAgenticReasoner
+
+        return OpenAIAgenticReasoner(model_name=model_name)
+
+    elif "gemini" in model_name_lower:
+        from inference_node.vqa.gemini_reasoner import GeminiAgenticReasoner
+
+        return GeminiAgenticReasoner(model_name=model_name)
+
     elif "qwen" in model_name_lower:
-        from inference_node.vqa.qwen import QwenVLMReasoner
+        from inference_node.vqa.qwen_reasoner import Qwen3VLAgenticReasoner
 
-        return QwenVLMReasoner(model_name=model_name, device=device)
+        return Qwen3VLAgenticReasoner(model_name=model_name, device=device)
+
     else:
         raise ValueError(
-            f"Unsupported VQA reasoning model: '{model_name}'. "
-            "Supported models include Florence-2 and Qwen2-VL family models."
+            f"Unsupported agentic reasoning model: '{model_name}'. "
+            "Supported models include: "
+            "API: 'openai-5.6', 'gpt-4o', 'gemini-2.5-flash', 'gemini-1.5-pro'; "
+            "On-device: 'Qwen/Qwen3-VL-8B-Instruct'."
         )

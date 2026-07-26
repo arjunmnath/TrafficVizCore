@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 from typing import Dict
 
 
@@ -8,29 +8,13 @@ class InferenceConfig(BaseModel):
     chroma_collection: str = "track_events"
 
     retrieval_model: str = "google/siglip2-base-patch16-224"
-    reasoning_model: str = "microsoft/Florence-2-large"
-    vlm_model: str = Field(
-        default="microsoft/Florence-2-large",
-        description="Deprecated alias for reasoning_model; kept for CLI compatibility.",
-    )
+    reasoning_model: str = "openai-5.6"  # Options: 'openai-5.6', 'gemini-2.5-flash', 'Qwen/Qwen3-VL-8B-Instruct'
 
     video_sources: Dict[str, str] = {}  # camera_id -> video file path
     retrieval_top_k: int = 20
     rerank_top_k: int = 5
+    max_planning_steps: int = 5
     metadata_filter_enabled: bool = True
-
-    top_k: int = Field(
-        default=20,
-        description="Deprecated alias for retrieval_top_k; kept for CLI compatibility.",
-    )
 
     api_port: int = 8100
     device: str = "auto"  # "auto", "cuda", "mps", "cpu"
-
-    @model_validator(mode="after")
-    def resolve_aliases(self) -> "InferenceConfig":
-        if self.vlm_model != "microsoft/Florence-2-large":
-            self.reasoning_model = self.vlm_model
-        if self.top_k != 20 and self.retrieval_top_k == 20:
-            self.retrieval_top_k = self.top_k
-        return self

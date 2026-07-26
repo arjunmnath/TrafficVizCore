@@ -1,28 +1,21 @@
-"""VQA reasoning module with adapter pattern."""
+"""VQA agentic reasoning module."""
 
-from inference_node.vqa.base import BaseVQAReasoner
+from inference_node.vqa.base import BaseAgenticVLMReasoner
 from inference_node.vqa.factory import get_vqa_reasoner
-from inference_node.vqa.florence import FlorenceReasoner
-from inference_node.vqa.qwen import QwenVLMReasoner
-from inference_node.vqa.types import CandidateImage, RankedResult
-
-
-def answer(
-    reasoner: BaseVQAReasoner,
-    query: str,
-    candidate_images: list[CandidateImage],
-    top_k: int = 5,
-) -> list[RankedResult]:
-    """Public interface: score retrieved candidates with a VQA reasoner."""
-    return reasoner.answer(query=query, candidates=candidate_images, top_k=top_k)
-
+from inference_node.vqa.gemini_reasoner import GeminiAgenticReasoner
+from inference_node.vqa.openai_reasoner import OpenAIAgenticReasoner
+from inference_node.vqa.qwen_reasoner import Qwen3VLAgenticReasoner
+from inference_node.vqa.types import AgenticPlanStep, CandidateImage, RankedResult, ToolCallSpec, ToolResult
 
 __all__ = [
-    "BaseVQAReasoner",
+    "BaseAgenticVLMReasoner",
     "get_vqa_reasoner",
-    "FlorenceReasoner",
-    "QwenVLMReasoner",
+    "OpenAIAgenticReasoner",
+    "GeminiAgenticReasoner",
+    "Qwen3VLAgenticReasoner",
     "CandidateImage",
     "RankedResult",
-    "answer",
+    "ToolCallSpec",
+    "ToolResult",
+    "AgenticPlanStep",
 ]

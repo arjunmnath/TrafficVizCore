@@ -1,26 +1,28 @@
-"""Base class for Visual Question Answering (VQA) reasoning engines."""
+"""Base class for Agentic Planning Visual Question Answering (VLM) reasoning engines."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Tuple
 
 import torch
 
-from inference_node.vqa.types import CandidateImage, RankedResult
+from inference_node.tools import InferenceToolRegistry
+from inference_node.vqa.types import AgenticPlanStep, RankedResult
 
 
-class BaseVQAReasoner(ABC):
-    """Abstract base class for VQA reasoning engines (adapters)."""
+class BaseAgenticVLMReasoner(ABC):
+    """Abstract base class for agentic VLM reasoning engines supporting multistage planning and tool usage."""
 
     @abstractmethod
-    def answer(
+    def plan_and_execute(
         self,
         query: str,
-        candidates: List[CandidateImage],
-        top_k: int = 5,
-    ) -> List[RankedResult]:
-        """Score each candidate image against the query and return top-K results."""
+        tools: InferenceToolRegistry,
+        max_steps: int = 5,
+        camera_id_filter: str | None = None,
+    ) -> Tuple[List[AgenticPlanStep], List[RankedResult]]:
+        """Perform multistage agentic planning using perception tools to produce final ranked results."""
         pass
 
     @staticmethod
