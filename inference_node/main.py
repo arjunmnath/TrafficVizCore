@@ -21,12 +21,15 @@ def run_inference_node(config: InferenceConfig) -> None:
     logger.info(f"PostgreSQL pgvector Table: {config.postgres_table}")
     logger.info(f"Video sources: {config.video_sources}")
 
-    logger.info("Connecting to PostgreSQL VectorStore...")
+    logger.info("Connecting to VectorStore (PostgreSQL pgvector / NPZ fallback)...")
     vector_store = VectorStore(
         table_name=config.postgres_table,
         postgres_url=config.postgres_url,
         supabase_url=config.supabase_url,
         supabase_key=config.supabase_key,
+        npz_dir=config.npz_dir,
+        npz_path=config.npz_path,
+        json_path=config.json_path,
     )
 
     logger.info(f"Loading retrieval encoder '{config.retrieval_model}'...")
@@ -70,6 +73,9 @@ if __name__ == "__main__":
     parser.add_argument("--postgres_url", type=str, default=None)
     parser.add_argument("--supabase_url", type=str, default=None)
     parser.add_argument("--supabase_key", type=str, default=None)
+    parser.add_argument("--npz_dir", type=str, default=None, help="Directory containing .npz embedding files bypassing Postgres.")
+    parser.add_argument("--npz_path", type=str, default=None, help="Path to single .npz embeddings file bypassing Postgres.")
+    parser.add_argument("--json_path", type=str, default=None, help="Path to accompanying .json metadata file.")
     parser.add_argument(
         "--retrieval_model",
         type=str,
@@ -103,6 +109,9 @@ if __name__ == "__main__":
         postgres_url=args.postgres_url,
         supabase_url=args.supabase_url,
         supabase_key=args.supabase_key,
+        npz_dir=args.npz_dir,
+        npz_path=args.npz_path,
+        json_path=args.json_path,
         retrieval_model=args.retrieval_model,
         reasoning_model=args.reasoning_model,
         video_sources=json.loads(args.video_sources),

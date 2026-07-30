@@ -34,7 +34,7 @@ class InferenceToolRegistry:
         return [
             {
                 "name": "encode_and_search_vector_store",
-                "description": "Performs text/image embedding similarity search against the PostgreSQL pgvector track event database.",
+                "description": "Performs text/image embedding similarity search against the PostgreSQL pgvector or NPZ track event database.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -55,8 +55,34 @@ class InferenceToolRegistry:
                 },
             },
             {
+                "name": "search_npz_embeddings",
+                "description": "Performs text/image embedding similarity search directly on an .npz file directory or file, bypassing PostgreSQL database requirements.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query_text": {
+                            "type": "string",
+                            "description": "Natural language query describing target appearance or context.",
+                        },
+                        "npz_dir": {
+                            "type": "string",
+                            "description": "Optional directory or file path containing .npz embeddings. If omitted, uses the loaded NPZ vector store.",
+                        },
+                        "top_k": {
+                            "type": "integer",
+                            "description": "Maximum number of candidate results to retrieve (default: 10).",
+                        },
+                        "camera_id": {
+                            "type": "string",
+                            "description": "Optional camera identifier filter (e.g., 'cam_1').",
+                        },
+                    },
+                    "required": ["query_text"],
+                },
+            },
+            {
                 "name": "query_metadata",
-                "description": "Queries track event metadata (camera ID, time window, vehicle/person attributes, track ID) from PostgreSQL.",
+                "description": "Queries track event metadata (camera ID, time window, vehicle/person attributes, track ID) from PostgreSQL or NPZ store.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -124,6 +150,8 @@ class InferenceToolRegistry:
         try:
             if name == "encode_and_search_vector_store":
                 return self._execute_vector_search(call_id, arguments)
+            elif name == "search_npz_embeddings":
+                return self._execute_npz_search(call_id, arguments)
             elif name == "query_metadata":
                 return self._execute_metadata_query(call_id, arguments)
             elif name == "extract_frame_crop":
@@ -177,6 +205,76 @@ class InferenceToolRegistry:
             content={
                 "parsed_semantic_query": parsed.semantic_text,
                 "metadata_filters_applied": parsed.metadata_filters,
+                "count": len(results_data),
+                "candidates": results_data,
+            },
+        )
+
+    def _execute_npz_search(self, call_id: str, args: Dict[str, Any]) -> ToolResult:
+        query_text = args.get("query_text", "")
+        top_k = int(args.get("top_k", 10))
+        camera_id = args.get("camera_id")
+        npz_dir = args.get("npz_dir")
+
+        if npz_dir:
+            npz_store = VectorStore(npz_dir=npz_dir)
+            query_embedding = self.retrieval.encoder.encode_text(query_text)
+            where = {"camera_id": camera_id} if camera_id else None
+            raw_candidates = npz_store.search(query_embedding=query_embedding, top_k=top_k, where=where)
+        else:
+            parsed, candidates_res = self.retrieval.search(
+                query=query_text, top_k=top_k, camera_id=camera_id
+            )
+            raw_candidates = [
+                {
+                    "id": cand.id,
+                    "metadata": {
+                        "camera_id": cand.camera_id,
+                        "track_id": cand.track_id,
+                        "camera_timestamp": cand.camera_timestamp,
+                        "video_pos_ms": cand.video_pos_ms,
+                        "bbox": cand.bbox,
+                    },
+                    "distance": cand.distance,
+                }
+                for cand in candidates_res
+            ]
+
+        results_data = []
+        for cand in raw_candidates:
+            meta = cand.get("metadata", {})
+            cand_key = f"{meta.get('camera_id')}_{meta.get('track_id')}_{float(meta.get('video_pos_ms', 0)):.0f}"
+            results_data.append(
+                {
+                    "candidate_key": cand_key,
+                    "id": cand.get("id"),
+                    "camera_id": meta.get("camera_id"),
+                    "camera_timestamp": meta.get("camera_timestamp"),
+                    "track_id": meta.get("track_id"),
+                    "global_id": meta.get("global_id", meta.get("track_id")),
+                    "video_pos_ms": meta.get("video_pos_ms"),
+                    "bbox": meta.get("bbox"),
+                    "class_label": meta.get("class_label"),
+                    "start_time": meta.get("start_time"),
+                    "end_time": meta.get("end_time"),
+                    "retrieval_distance": cand.get("distance"),
+                    "retrieval_embedding": cand.get("retrieval_embedding", meta.get("retrieval_embedding")),
+                    "appearance_embedding": cand.get("appearance_embedding", meta.get("appearance_embedding")),
+                    "track_details": meta.get("track_details") or {
+                        "track_id": meta.get("track_id"),
+                        "compressed_track": meta.get("compressed_track"),
+                        "trajectory": meta.get("trajectory"),
+                        "occurrences": meta.get("occurrences"),
+                    },
+                }
+            )
+
+        return ToolResult(
+            call_id=call_id,
+            name="search_npz_embeddings",
+            content={
+                "query_text": query_text,
+                "npz_source": npz_dir or getattr(self.vector_store, "npz_dir", "loaded_store"),
                 "count": len(results_data),
                 "candidates": results_data,
             },

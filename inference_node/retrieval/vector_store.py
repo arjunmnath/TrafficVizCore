@@ -22,9 +22,16 @@ class VectorStore:
         supabase_url: Optional[str] = None,
         supabase_key: Optional[str] = None,
         local_db_path: Optional[str] = None,
+        npz_dir: Optional[str] = None,
+        npz_path: Optional[str] = None,
+        json_path: Optional[str] = None,
     ) -> None:
         self.logger = setup_logger("VectorStore")
         self.table_name = table_name
+
+        self.npz_dir = npz_dir or os.environ.get("NPZ_DIR")
+        self.npz_path = npz_path or os.environ.get("NPZ_PATH")
+        self.json_path = json_path or os.environ.get("JSON_PATH")
 
         self.postgres_url = (
             postgres_url
@@ -40,10 +47,19 @@ class VectorStore:
         self.conn_type = None
         self.conn = None
         self.supabase_client = None
+        self.npz_records: List[Dict[str, Any]] = []
 
         self._connect()
 
     def _connect(self) -> None:
+        if self.npz_dir or self.npz_path:
+            self._load_from_npz(self.npz_dir or self.npz_path, self.json_path)
+            self.conn_type = "npz"
+            self.logger.info(
+                f"Connected to NPZ vector store: loaded {len(self.npz_records)} records"
+            )
+            return
+
         if self.postgres_url:
             try:
                 import psycopg2
@@ -81,6 +97,19 @@ class VectorStore:
                 return
             except Exception as err:
                 self.logger.warning(f"Could not connect to local SQLite database: {err}")
+
+        # Workspace fallback to NPZ if available
+        workspace_root = Path(__file__).resolve().parent.parent.parent
+        default_npz = workspace_root / "temp.noinclude.npz"
+        default_json = workspace_root / "temp.noinclude.json"
+        if default_npz.exists():
+            self._load_from_npz(str(default_npz), str(default_json) if default_json.exists() else None)
+            if self.npz_records:
+                self.conn_type = "npz"
+                self.logger.info(
+                    f"Connected to NPZ workspace fallback: loaded {len(self.npz_records)} records from '{default_npz.name}'"
+                )
+                return
 
         self.logger.warning("Initializing empty in-memory vector store connection.")
 
@@ -262,6 +291,33 @@ class VectorStore:
             except Exception as err:
                 self.logger.error(f"Error searching via Supabase client: {err}")
 
+        elif self.conn_type == "npz":
+            query_norm = np.linalg.norm(query_embedding)
+            if query_norm == 0:
+                query_norm = 1.0
+
+            scored = []
+            for rec in self.npz_records:
+                if not self._matches_where(rec, where):
+                    continue
+                rec_emb = rec["embedding"]
+                r_norm = np.linalg.norm(rec_emb)
+                if r_norm == 0:
+                    r_norm = 1.0
+
+                sim = float(np.dot(query_embedding, rec_emb) / (query_norm * r_norm))
+                dist = 1.0 - sim
+                scored.append({
+                    "id": rec["id"],
+                    "metadata": rec["metadata"],
+                    "distance": dist,
+                    "retrieval_embedding": rec.get("retrieval_embedding"),
+                    "appearance_embedding": rec.get("appearance_embedding"),
+                })
+
+            scored.sort(key=lambda x: x["distance"])
+            candidates = scored[:top_k]
+
         return candidates
 
     def query_metadata(
@@ -378,6 +434,13 @@ class VectorStore:
             except Exception as err:
                 self.logger.error(f"Error querying metadata via Supabase: {err}")
 
+        elif self.conn_type == "npz":
+            for rec in self.npz_records:
+                if self._matches_where(rec, where):
+                    results.append(rec["metadata"])
+                    if len(results) >= limit:
+                        break
+
         return results
 
     def get_event_count(self) -> int:
@@ -409,6 +472,9 @@ class VectorStore:
             except Exception as err:
                 self.logger.error(f"Error getting count via Supabase: {err}")
                 return 0
+
+        elif self.conn_type == "npz":
+            return len(self.npz_records)
 
         return 0
 
@@ -493,3 +559,276 @@ class VectorStore:
         if not conditions:
             return "", []
         return "WHERE " + " AND ".join(conditions), params
+
+    def _load_from_npz(self, npz_target: str, json_target: Optional[str] = None) -> None:
+        """Load track embeddings and metadata from an .npz file or directory."""
+        self.npz_records = []
+        target_path = Path(npz_target)
+
+        npz_files: List[Path] = []
+        if target_path.is_dir():
+            npz_files = sorted(list(target_path.glob("*.npz")))
+        elif target_path.is_file() and target_path.suffix == ".npz":
+            npz_files = [target_path]
+
+        if not npz_files:
+            self.logger.warning(f"No .npz files found at path '{npz_target}'")
+            return
+
+        json_data: Dict[str, Any] = {}
+        json_paths: List[Path] = []
+        if json_target and Path(json_target).exists():
+            json_paths = [Path(json_target)]
+        elif target_path.is_dir():
+            json_paths = sorted(list(target_path.glob("*.json")))
+        elif target_path.is_file():
+            stem_json = target_path.with_suffix(".json")
+            if stem_json.exists():
+                json_paths = [stem_json]
+
+        for jp in json_paths:
+            try:
+                with open(jp, "r") as f:
+                    content = json.load(f)
+                    if isinstance(content, dict):
+                        json_data.update(content)
+            except Exception as e:
+                self.logger.warning(f"Failed loading JSON metadata from {jp}: {e}")
+
+        def camera_id_from_clip(clip_name: str) -> str:
+            stem = clip_name.replace(".mp4", "")
+            if stem.startswith("clip") and stem[4:].isdigit():
+                return f"cam_{stem[4:]}"
+            return stem
+
+        for npz_file in npz_files:
+            try:
+                npz_data = np.load(npz_file, allow_pickle=True)
+            except Exception as e:
+                self.logger.error(f"Error reading NPZ file {npz_file}: {e}")
+                continue
+
+            if "retrieval_embeddings" in npz_data or "embeddings" in npz_data:
+                embs = npz_data.get("retrieval_embeddings", npz_data.get("embeddings"))
+                metas = npz_data.get("metadata", npz_data.get("metadatas"))
+                ids = npz_data.get("ids")
+                if embs is not None:
+                    n_samples = len(embs)
+                    for i in range(n_samples):
+                        vec = np.array(embs[i], dtype=np.float32)
+                        norm = np.linalg.norm(vec)
+                        if norm > 0:
+                            vec = vec / norm
+
+                        meta_dict = {}
+                        if metas is not None and i < len(metas):
+                            m_raw = metas[i]
+                            if isinstance(m_raw, str):
+                                try:
+                                    meta_dict = json.loads(m_raw)
+                                except Exception:
+                                    meta_dict = {"raw": m_raw}
+                            elif isinstance(m_raw, dict):
+                                meta_dict = m_raw
+
+                        doc_id = str(ids[i]) if ids is not None and i < len(ids) else f"npz_{npz_file.stem}_{i}"
+                        cam_id = str(meta_dict.get("camera_id", "cam_1"))
+                        track_id = int(meta_dict.get("track_id", i))
+                        start_time = float(meta_dict.get("start_time", meta_dict.get("camera_timestamp", 0.0)))
+
+                        rec = {
+                            "id": doc_id,
+                            "camera_id": cam_id,
+                            "track_id": track_id,
+                            "camera_timestamp": start_time,
+                            "video_pos_ms": float(meta_dict.get("video_pos_ms", start_time * 1000.0)),
+                            "bbox": meta_dict.get("bbox"),
+                            "class_label": str(meta_dict.get("class_label", "object")),
+                            "start_time": start_time,
+                            "end_time": float(meta_dict.get("end_time", start_time)),
+                            "trajectory": meta_dict.get("trajectory"),
+                            "embedding": vec,
+                            "metadata": meta_dict,
+                        }
+                        self.npz_records.append(rec)
+                continue
+
+            if json_data:
+                for video_name, tracks in json_data.items():
+                    if not isinstance(tracks, list):
+                        continue
+                    cam_id = camera_id_from_clip(video_name)
+                    for item in tracks:
+                        if not isinstance(item, dict):
+                            continue
+                        tid = item.get("track_id")
+                        comp_track = item.get("compressed_track") or {}
+                        if not isinstance(comp_track, dict):
+                            comp_track = {}
+
+                        cls_lbl = comp_track.get("class", item.get("class", "object"))
+                        st_time = float(comp_track.get("start_time", item.get("start_time", 0.0)))
+                        end_t = float(comp_track.get("end_time", item.get("end_time", 0.0)))
+                        traj = comp_track.get("trajectory") or item.get("trajectory") or {}
+
+                        app_candidate_keys = [
+                            f"{video_name}_app_{tid}",
+                            f"{video_name}_smooth_{tid}",
+                            f"{video_name}_occ_{tid}",
+                            f"{video_name}_{tid}",
+                            f"{cam_id}_{tid}",
+                        ]
+                        retrieval_candidate_keys = [
+                            f"{video_name}_retrieval_{tid}",
+                            f"{video_name}_siglip_{tid}",
+                            f"{cam_id}_retrieval_{tid}",
+                        ]
+
+                        app_vec = None
+                        for ck in app_candidate_keys:
+                            if ck in npz_data:
+                                raw_arr = npz_data[ck]
+                                if raw_arr.ndim == 2:
+                                    app_vec = np.mean(raw_arr, axis=0)
+                                else:
+                                    app_vec = raw_arr
+                                break
+
+                        retrieval_vec = None
+                        for ck in retrieval_candidate_keys:
+                            if ck in npz_data:
+                                raw_arr = npz_data[ck]
+                                if raw_arr.ndim == 2:
+                                    retrieval_vec = np.mean(raw_arr, axis=0)
+                                else:
+                                    retrieval_vec = raw_arr
+                                break
+
+                        if retrieval_vec is None:
+                            retrieval_vec = app_vec
+                        if app_vec is None:
+                            app_vec = retrieval_vec
+
+                        if app_vec is not None:
+                            app_vec = np.array(app_vec, dtype=np.float32)
+                            norm = np.linalg.norm(app_vec)
+                            if norm > 0:
+                                app_vec = app_vec / norm
+
+                        if retrieval_vec is not None:
+                            retrieval_vec = np.array(retrieval_vec, dtype=np.float32)
+                            norm = np.linalg.norm(retrieval_vec)
+                            if norm > 0:
+                                retrieval_vec = retrieval_vec / norm
+
+                        if retrieval_vec is not None or app_vec is not None:
+                            primary_vec = retrieval_vec if retrieval_vec is not None else app_vec
+                            evt_id = f"{cam_id}_{tid}_{st_time:.4f}"
+                            meta_dict = {
+                                "camera_id": cam_id,
+                                "track_id": tid,
+                                "global_id": item.get("global_id", tid),
+                                "camera_timestamp": st_time,
+                                "video_pos_ms": st_time * 1000.0,
+                                "class_label": cls_lbl,
+                                "start_time": st_time,
+                                "end_time": end_t,
+                                "video_name": video_name,
+                                "trajectory": traj,
+                                "compressed_track": comp_track,
+                                "occurrences": item.get("occurrences"),
+                                "track_details": item,  # Full track metadata record from registry JSON
+                            }
+                            rec = {
+                                "id": evt_id,
+                                "camera_id": cam_id,
+                                "track_id": tid,
+                                "global_id": item.get("global_id", tid),
+                                "camera_timestamp": st_time,
+                                "video_pos_ms": st_time * 1000.0,
+                                "bbox": None,
+                                "class_label": cls_lbl,
+                                "start_time": st_time,
+                                "end_time": end_t,
+                                "trajectory": traj,
+                                "embedding": primary_vec,
+                                "retrieval_embedding": retrieval_vec.tolist() if retrieval_vec is not None else None,
+                                "appearance_embedding": app_vec.tolist() if app_vec is not None else None,
+                                "metadata": meta_dict,
+                            }
+                            self.npz_records.append(rec)
+            else:
+                for key in npz_data.files:
+                    raw_arr = npz_data[key]
+                    if raw_arr.ndim == 2:
+                        vec = np.mean(raw_arr, axis=0)
+                    else:
+                        vec = raw_arr
+                    vec = np.array(vec, dtype=np.float32)
+                    norm = np.linalg.norm(vec)
+                    if norm > 0:
+                        vec = vec / norm
+
+                    cam_id = "cam_1"
+                    tid = 0
+                    parts = key.split("_")
+                    for p in parts:
+                        if p.isdigit():
+                            tid = int(p)
+                            break
+                    meta_dict = {
+                        "camera_id": cam_id,
+                        "track_id": tid,
+                        "camera_timestamp": 0.0,
+                        "video_pos_ms": 0.0,
+                        "class_label": "object",
+                        "start_time": 0.0,
+                        "end_time": 0.0,
+                    }
+                    self.npz_records.append({
+                        "id": key,
+                        "camera_id": cam_id,
+                        "track_id": tid,
+                        "camera_timestamp": 0.0,
+                        "video_pos_ms": 0.0,
+                        "bbox": None,
+                        "class_label": "object",
+                        "start_time": 0.0,
+                        "end_time": 0.0,
+                        "trajectory": None,
+                        "embedding": vec,
+                        "metadata": meta_dict,
+                    })
+
+    @staticmethod
+    def _matches_where(record: dict, where: Optional[Dict[str, Any]]) -> bool:
+        if not where:
+            return True
+
+        meta = record.get("metadata", {})
+
+        def check_clause(k: str, v: Any) -> bool:
+            if k == "$and" and isinstance(v, list):
+                return all(VectorStore._matches_where(record, sub) for sub in v)
+
+            val = record.get(k)
+            if val is None:
+                val = meta.get(k)
+
+            if isinstance(v, dict):
+                for op, op_val in v.items():
+                    if op == "$gte" and (val is None or val < op_val):
+                        return False
+                    elif op == "$lte" and (val is None or val > op_val):
+                        return False
+                    elif op == "$gt" and (val is None or val <= op_val):
+                        return False
+                    elif op == "$lt" and (val is None or val >= op_val):
+                        return False
+                    elif op == "$eq" and val != op_val:
+                        return False
+                return True
+            else:
+                return val == v
+
+        return all(check_clause(k, v) for k, v in where.items())
