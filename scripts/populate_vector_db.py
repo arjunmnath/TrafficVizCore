@@ -18,8 +18,8 @@ from tqdm import tqdm
 workspace_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(workspace_root))
 
-from inference_node.retrieval.encoder import get_retrieval_encoder
-from inference_node.retrieval.vector_store import VectorStore
+from vlm_retrieval.retrieval.encoder import get_retrieval_encoder
+from vlm_retrieval.retrieval.vector_store import VectorStore
 from shared.utils import setup_logger
 
 logger = setup_logger("PrepopulateDB")

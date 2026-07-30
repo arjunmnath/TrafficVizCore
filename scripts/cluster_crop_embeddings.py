@@ -40,7 +40,7 @@ from rich.panel import Panel
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeRemainingColumn
 from rich.table import Table
 
-from inference_node.retrieval.encoder.factory import get_retrieval_encoder
+from vlm_retrieval.retrieval.encoder.factory import get_retrieval_encoder
 
 console = Console()
 

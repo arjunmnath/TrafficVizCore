@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 workspace_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(workspace_root))
 
-from inference_node.retrieval.encoder import get_retrieval_encoder
+from vlm_retrieval.retrieval.encoder import get_retrieval_encoder
 from shared.utils import setup_logger
 
 logger = setup_logger("PopulatePostgresDB")

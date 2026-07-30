@@ -39,10 +39,10 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from inference_node.config import InferenceConfig
-from inference_node.retrieval.encoder import get_retrieval_encoder
-from inference_node.retrieval.search import RetrievalEngine
-from inference_node.retrieval.vector_store import VectorStore
+from vlm_retrieval.config import InferenceConfig
+from vlm_retrieval.retrieval.encoder import get_retrieval_encoder
+from vlm_retrieval.retrieval.search import RetrievalEngine
+from vlm_retrieval.retrieval.vector_store import VectorStore
 
 console = Console()
 
@@ -223,9 +223,9 @@ def run_direct_inference(args, vector_store: VectorStore) -> List[Dict[str, Any]
 
 def run_agentic_inference(args, vector_store: VectorStore) -> List[Dict[str, Any]]:
     """Execute full multistage Agentic Planning VLM pipeline."""
-    from inference_node.agentic_pipeline import AgenticPlannerPipeline
-    from inference_node.frame_extractor import FrameExtractor
-    from inference_node.vqa import get_vqa_reasoner
+    from vlm_retrieval.agentic_pipeline import AgenticPlannerPipeline
+    from vlm_retrieval.frame_extractor import FrameExtractor
+    from vlm_retrieval.vqa import get_vqa_reasoner
 
     console.print(f"[bold cyan]Initializing SigLIP2 encoder:[/bold cyan] {args.retrieval_model}")
     encoder = get_retrieval_encoder(model_name=args.retrieval_model, device=args.device)

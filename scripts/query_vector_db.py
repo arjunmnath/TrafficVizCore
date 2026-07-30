@@ -15,9 +15,9 @@ from pathlib import Path
 workspace_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(workspace_root))
 
-from inference_node.retrieval.encoder import get_retrieval_encoder
-from inference_node.retrieval.search import RetrievalEngine, RetrievalResult
-from inference_node.retrieval.vector_store import VectorStore
+from vlm_retrieval.retrieval.encoder import get_retrieval_encoder
+from vlm_retrieval.retrieval.search import RetrievalEngine, RetrievalResult
+from vlm_retrieval.retrieval.vector_store import VectorStore
 import re
 from shared.utils import setup_logger
 

@@ -17,9 +17,9 @@ from tqdm import tqdm
 workspace_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(workspace_root))
 
-from inference_node.retrieval.encoder import get_retrieval_encoder, BaseRetrievalEncoder
-from inference_node.vqa import get_vqa_reasoner, BaseVQAReasoner, CandidateImage
-from inference_node.retrieval.query_parser import parse_query
+from vlm_retrieval.retrieval.encoder import get_retrieval_encoder, BaseRetrievalEncoder
+from vlm_retrieval.vqa import get_vqa_reasoner, BaseVQAReasoner, CandidateImage
+from vlm_retrieval.retrieval.query_parser import parse_query
 from shared.utils import setup_logger, compute_cosine_similarity
 
 logger = setup_logger("DryRunInference")
