@@ -5,7 +5,9 @@ from __future__ import annotations
 from inference_node.vqa.base import BaseAgenticVLMReasoner
 
 
-def get_vqa_reasoner(model_name: str, device: str = "auto") -> BaseAgenticVLMReasoner:
+def get_vqa_reasoner(
+    model_name: str = "Qwen/Qwen3-VL-8B-Instruct", device: str = "auto"
+) -> BaseAgenticVLMReasoner:
     """Factory to resolve a model name to its respective Agentic VLM Reasoner adapter.
 
     Args:

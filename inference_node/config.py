@@ -14,7 +14,7 @@ class InferenceConfig(BaseModel):
 
     retrieval_model: str = "google/siglip2-base-patch16-224"
     reasoning_model: str = (
-        "openai-5.6"  # Options: 'openai-5.6', 'gemini-2.5-flash', 'Qwen/Qwen3-VL-8B-Instruct'
+        "Qwen/Qwen3-VL-8B-Instruct"  # Options: 'Qwen/Qwen3-VL-8B-Instruct', 'openai-5.6', 'gemini-2.5-flash'
     )
 
     video_sources: Dict[str, str] = {}  # camera_id -> video file path

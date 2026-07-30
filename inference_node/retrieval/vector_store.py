@@ -25,9 +25,11 @@ class VectorStore:
         npz_dir: Optional[str] = None,
         npz_path: Optional[str] = None,
         json_path: Optional[str] = None,
+        encoder: Optional[Any] = None,
     ) -> None:
         self.logger = setup_logger("VectorStore")
         self.table_name = table_name
+        self.encoder = encoder
 
         self.npz_dir = npz_dir or os.environ.get("NPZ_DIR")
         self.npz_path = npz_path or os.environ.get("NPZ_PATH")
@@ -300,13 +302,28 @@ class VectorStore:
             for rec in self.npz_records:
                 if not self._matches_where(rec, where):
                     continue
-                rec_emb = rec["embedding"]
-                r_norm = np.linalg.norm(rec_emb)
-                if r_norm == 0:
-                    r_norm = 1.0
 
-                sim = float(np.dot(query_embedding, rec_emb) / (query_norm * r_norm))
-                dist = 1.0 - sim
+                rec_emb = rec.get("embedding")
+                if rec.get("retrieval_embedding") is not None:
+                    r_arr = np.array(rec["retrieval_embedding"], dtype=np.float32)
+                    if r_arr.shape[0] == query_embedding.shape[0]:
+                        rec_emb = r_arr
+
+                if rec_emb is None or rec_emb.shape[0] != query_embedding.shape[0]:
+                    crop_emb = self._encode_crop_if_needed(rec, target_dim=query_embedding.shape[0])
+                    if crop_emb is not None and crop_emb.shape[0] == query_embedding.shape[0]:
+                        rec_emb = crop_emb
+                        rec["retrieval_embedding"] = crop_emb.tolist()
+
+                if rec_emb is None or rec_emb.ndim == 0 or rec_emb.shape[0] != query_embedding.shape[0]:
+                    dist = 1.0
+                else:
+                    r_norm = np.linalg.norm(rec_emb)
+                    if r_norm == 0:
+                        r_norm = 1.0
+                    sim = float(np.dot(query_embedding, rec_emb) / (query_norm * r_norm))
+                    dist = 1.0 - sim
+
                 scored.append({
                     "id": rec["id"],
                     "metadata": rec["metadata"],
@@ -832,3 +849,42 @@ class VectorStore:
                 return val == v
 
         return all(check_clause(k, v) for k, v in where.items())
+
+    def _encode_crop_if_needed(self, rec: dict, target_dim: int) -> np.ndarray | None:
+        """Encode track crop image with encoder on-demand if dimension mismatch occurs."""
+        meta = rec.get("metadata", {})
+        video_name = meta.get("video_name", "")
+        track_id = rec.get("track_id", 0)
+
+        workspace_root = Path(__file__).resolve().parent.parent.parent
+        crops_dir = workspace_root / "crops.noinclude"
+
+        crop_path = None
+        # Primary check: crops.noinclude/{video_name}_{track_id}/
+        sub_dir = crops_dir / f"{video_name}_{track_id}"
+        if sub_dir.exists() and sub_dir.is_dir():
+            files = sorted(list(sub_dir.glob("*.jpg")) + list(sub_dir.glob("*.png")))
+            if files:
+                crop_path = files[0]
+
+        if not crop_path:
+            clip_stem = video_name.replace(".mp4", "")
+            for ext in [".jpg", ".jpeg", ".png"]:
+                p = crops_dir / f"{clip_stem}_track_{track_id}{ext}"
+                if p.exists():
+                    crop_path = p
+                    break
+
+        if crop_path and crop_path.exists():
+            try:
+                from PIL import Image
+                if self.encoder is None:
+                    from inference_node.retrieval.encoder import get_retrieval_encoder
+                    self.encoder = get_retrieval_encoder(model_name="google/siglip2-base-patch16-224")
+                with Image.open(crop_path) as img:
+                    emb = self.encoder.encode_image(img)
+                    return emb
+            except Exception as err:
+                self.logger.warning(f"Could not encode candidate crop {crop_path}: {err}")
+
+        return None

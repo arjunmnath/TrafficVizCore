@@ -84,8 +84,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--reasoning_model",
         type=str,
-        default="openai-5.6",
-        help="Options: 'openai-5.6', 'gemini-2.5-flash', 'Qwen/Qwen3-VL-8B-Instruct'",
+        default="Qwen/Qwen3-VL-8B-Instruct",
+        help="Options: 'Qwen/Qwen3-VL-8B-Instruct', 'openai-5.6', 'gemini-2.5-flash'",
     )
     parser.add_argument("--api_port", type=int, default=8100)
     parser.add_argument("--retrieval_top_k", type=int, default=20)
