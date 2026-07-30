@@ -887,7 +887,7 @@ class VectorStore:
                 from PIL import Image
                 if self.encoder is None:
                     from vlm_retrieval.retrieval.encoder import get_retrieval_encoder
-                    self.encoder = get_retrieval_encoder(model_name="google/siglip2-base-patch16-224")
+                    self.encoder = get_retrieval_encoder(model_name="google/siglip2-so400m-patch14-384")
                 with Image.open(crop_path) as img:
                     emb = self.encoder.encode_image(img)
                     return emb

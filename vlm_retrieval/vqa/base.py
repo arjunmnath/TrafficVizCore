@@ -355,17 +355,24 @@ class BaseAgenticVLMReasoner(ABC):
 
     @staticmethod
     def _resolve_device(device: str) -> str:
-        if device != "auto":
-            return device
-        if torch.cuda.is_available():
+        """Resolves target device for local VLM reasoning, enforcing a hard uncrossable condition that VLM inference runs only on CUDA available devices."""
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "VLM inference requires a CUDA-enabled GPU, but CUDA is not available on this system."
+            )
+
+        if device == "auto" or device is None or device == "":
             return "cuda"
-        if torch.backends.mps.is_available():
-            return "mps"
-        return "cpu"
+
+        dev_str = str(device).lower()
+        if not dev_str.startswith("cuda"):
+            raise RuntimeError(
+                f"VLM inference can only be run on CUDA available devices. Requested device '{device}' is not allowed."
+            )
+
+        return device
 
     @staticmethod
     def _resolve_dtype(device: str) -> torch.dtype:
-        if device in ("cuda", "mps"):
-            return torch.bfloat16 if device == "cuda" else torch.float16
-        return torch.float32
+        return torch.bfloat16 if str(device).startswith("cuda") else torch.float32
 

@@ -12,7 +12,7 @@ class VLMRetrievalConfig(BaseModel):
     npz_path: Optional[str] = None
     json_path: Optional[str] = None
 
-    retrieval_model: str = "google/siglip2-base-patch16-224"
+    retrieval_model: str = "google/siglip2-so400m-patch14-384"
     reasoning_model: str = (
         "Qwen/Qwen3-VL-8B-Instruct"  # Options: 'Qwen/Qwen3-VL-8B-Instruct', 'openai-5.6', 'gemini-2.5-flash'
     )

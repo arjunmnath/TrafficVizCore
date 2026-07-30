@@ -14,7 +14,7 @@ Usage Example:
     python scripts/produce_siglip_embeddings.py --crop_dir crops.noinclude --output_npz registry.embeddings.npz
 
     # Specify custom model and target representative views count
-    python scripts/produce_siglip_embeddings.py --crop_dir reid_crops_cleaned --target_k 4 --model_name google/siglip2-base-patch16-224
+    python scripts/produce_siglip_embeddings.py --crop_dir reid_crops_cleaned --target_k 4 --model_name google/siglip2-so400m-patch14-384
 """
 
 from __future__ import annotations
@@ -87,8 +87,8 @@ def parse_args():
     parser.add_argument(
         "--model_name",
         type=str,
-        default="google/siglip2-base-patch16-224",
-        help="SigLIP2 retrieval model name (e.g. 'google/siglip2-base-patch16-224').",
+        default="google/siglip2-so400m-patch14-384",
+        help="SigLIP2 retrieval model name (e.g. 'google/siglip2-so400m-patch14-384').",
     )
     parser.add_argument(
         "--device",

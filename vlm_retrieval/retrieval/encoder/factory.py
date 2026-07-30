@@ -9,7 +9,7 @@ def get_retrieval_encoder(model_name: str, device: str = "auto") -> BaseRetrieva
     """Factory to resolve a model name to its respective Retrieval Encoder adapter.
 
     Args:
-        model_name: Name/path of the model (e.g. google/siglip2-base-patch16-224,
+        model_name: Name/path of the model (e.g. google/siglip2-so400m-patch14-384,
           openclip-vit, openclip:ViT-B-32/laion2b_s34b_b79k)
         device: Device to load the model on ("auto", "cuda", "mps", "cpu")
 

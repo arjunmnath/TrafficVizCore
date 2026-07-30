@@ -115,7 +115,7 @@ def parse_args():
     parser.add_argument(
         "--retrieval_model",
         type=str,
-        default="google/siglip2-base-patch16-224",
+        default="google/siglip2-so400m-patch14-384",
         help="Retrieval encoder model name.",
     )
     parser.add_argument(

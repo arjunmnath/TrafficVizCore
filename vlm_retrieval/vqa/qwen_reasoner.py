@@ -45,15 +45,9 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
                 Qwen3VLForConditionalGeneration,
             )
 
-            dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
+            dtype = torch.bfloat16 if self.device.startswith("cuda") else torch.float32
             self.processor = AutoProcessor.from_pretrained(self.model_name, trust_remote_code=True)
-
-            if torch.cuda.is_available():
-                resolved_device_map = self.device_map or "balanced"
-            elif self.device in ("cuda", "mps", "auto", "balanced"):
-                resolved_device_map = self.device_map if self.device_map else self.device
-            else:
-                resolved_device_map = None
+            resolved_device_map = self.device_map or "balanced"
 
             try:
                 self.model = AutoModelForImageTextToText.from_pretrained(
@@ -72,8 +66,6 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
                     device_map=resolved_device_map,
                     trust_remote_code=True,
                 )
-            if self.device == "cpu":
-                self.model = self.model.to("cpu")
             self.model.eval()
             self.logger.info(f"Successfully loaded '{self.model_name}'")
         except Exception as err:
@@ -132,9 +124,7 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
             {"role": "user", "content": self._build_user_message(query, camera_id_filter)},
         ]
 
-        target_device = self.model.device if hasattr(self.model, "device") else (
-            self.device if self.device in ("cuda", "mps", "cpu") else "cpu"
-        )
+        target_device = self.model.device if hasattr(self.model, "device") else self.device
 
         call_counter = 0
 

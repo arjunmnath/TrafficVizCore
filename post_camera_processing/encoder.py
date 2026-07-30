@@ -20,7 +20,7 @@ class SigLIP2BatchEncoder:
 
     def __init__(
         self,
-        model_name: str = "google/siglip2-base-patch16-224",
+        model_name: str = "google/siglip2-so400m-patch14-384",
         device: str = "auto",
         batch_size: int = 32,
         logger: Optional[Any] = None,

@@ -1,435 +1,411 @@
 #!/usr/bin/env python3
 """
-Interactive terminal demo application to test SigLIP2 semantic search and Florence-2 VQA crop reranking.
-Loads cropped identity images, encodes them in memory, and provides an interactive search interface for testing queries.
+Interactive CCTV Semantic Search & Agentic VLM Reranking Demo Application
+
+Operates directly against .npz embedding files, registry JSON metadata, and VectorStore.
+Supports both fast direct vector search (SigLIP2 / cosine retrieval) and multistage
+Agentic VLM visual reasoning (Qwen3-VL, Gemini, OpenAI) with an interactive terminal shell loop.
+
+Usage Examples:
+    # Launch interactive terminal shell (defaults to direct mode, type /mode agentic to switch)
+    python scripts/demo_interactive_retrieval.py
+
+    # Launch interactive shell in agentic VLM mode with Qwen3-VL
+    python scripts/demo_interactive_retrieval.py --mode agentic --reasoning_model Qwen/Qwen3-VL-8B-Instruct
+
+    # Run a single query directly and exit
+    python scripts/demo_interactive_retrieval.py --query "a red vehicle or motorcycle" --top_k 5
 """
+
+from __future__ import annotations
 
 import argparse
 import json
 import os
-import re
 import sys
 from pathlib import Path
-from PIL import Image
-from tqdm import tqdm
+from typing import Any, Dict, List, Optional
 
-# Add workspace root to python path to import app modules
+# Ensure workspace root is in sys.path
 workspace_root = Path(__file__).resolve().parent.parent
-sys.path.append(str(workspace_root))
+if str(workspace_root) not in sys.path:
+    sys.path.insert(0, str(workspace_root))
 
-from vlm_retrieval.retrieval.encoder import get_retrieval_encoder, BaseRetrievalEncoder
-from vlm_retrieval.vqa import get_vqa_reasoner, BaseVQAReasoner, CandidateImage
-from vlm_retrieval.retrieval.query_parser import parse_query
-from shared.utils import setup_logger, compute_cosine_similarity
+from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.prompt import Prompt
+from rich.table import Table
 
-logger = setup_logger("DryRunInference")
+from vlm_retrieval.agentic_pipeline import AgenticPlannerPipeline
+from vlm_retrieval.config import InferenceConfig
+from vlm_retrieval.frame_extractor import FrameExtractor
+from vlm_retrieval.retrieval.encoder import get_retrieval_encoder
+from vlm_retrieval.retrieval.search import RetrievalEngine
+from vlm_retrieval.retrieval.vector_store import VectorStore
+from vlm_retrieval.vqa import get_vqa_reasoner
 
-# ANSI colors for beautiful terminal output
-_BOLD = "\033[1m"
-_CYAN = "\033[96m"
-_GREEN = "\033[92m"
-_YELLOW = "\033[93m"
-_RED = "\033[91m"
-_MAGENTA = "\033[95m"
-_DIM = "\033[2m"
-_RESET = "\033[0m"
-
-# Filename pattern expected inside each global-ID subdirectory:
-#   clip1_f000001_t1_s0.04_sim1.0000.jpg (or clip1_f000001_t1_s0.04.jpg)
-FILENAME_REGEX = re.compile(
-    r"^(clip\d+)_f(\d+)_t(\d+)_s([\d.]+)(?:_sim([\d.]+))?\.(jpg|jpeg|png)$", re.IGNORECASE
-)
+console = Console()
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Dry-run script to test SigLIP2 retrieval and Florence-2 VQA in memory."
-    )
-    parser.add_argument(
-        "--crops_dir",
-        type=str,
-        default=str(workspace_root / "reid" / "v1"),
-        help="Root directory of ReID crops.",
-    )
-    parser.add_argument(
-        "--reid_json",
-        type=str,
-        default=str(workspace_root / "reid" / "cleaned_reid.json"),
-        help="Path to cleaned_reid.json for bbox / class label lookup.",
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="auto",
-        choices=["cpu", "cuda", "mps", "auto"],
-        help="Device to use for PyTorch models.",
-    )
-    parser.add_argument(
-        "--retrieval_model",
-        type=str,
-        default="openai/clip-vit-large-patch14",
-        help="Retrieval encoder model (e.g. google/siglip2-base-patch16-224, openclip-vit, openclip:ViT-B-32/laion2b_s34b_b79k)",
-    )
-    parser.add_argument(
-        "--retrieval_top_k",
-        type=int,
-        default=10,
-        help="Number of candidates to retrieve using SigLIP2 (passed to Florence-2).",
-    )
-    parser.add_argument(
-        "--rerank_top_k",
-        type=int,
-        default=5,
-        help="Number of final candidates to return after Florence-2 reranking.",
-    )
-    parser.add_argument(
-        "--reasoning_model",
-        type=str,
-        default="microsoft/Florence-2-large",
-        help="VQA reasoning model to use (e.g. microsoft/Florence-2-large or Qwen/Qwen2-VL-2B-Instruct).",
+        description="Interactive terminal demo for SigLIP2 semantic search and Agentic VLM reasoning."
     )
     parser.add_argument(
         "--query",
         type=str,
         default=None,
-        help="Run a single query and exit. If not provided, enters interactive mode.",
+        help="Run a single query and exit. If omitted, launches interactive shell session.",
+    )
+    parser.add_argument(
+        "--npz_path",
+        type=str,
+        default=str(workspace_root / "registry.embeddings.npz")
+        if (workspace_root / "registry.embeddings.npz").exists()
+        else (str(workspace_root / "temp.noinclude.npz") if (workspace_root / "temp.noinclude.npz").exists() else None),
+        help="Path to single .npz embeddings file.",
+    )
+    parser.add_argument(
+        "--npz_dir",
+        type=str,
+        default=None,
+        help="Directory containing .npz embedding files.",
+    )
+    parser.add_argument(
+        "--json_path",
+        type=str,
+        default=str(workspace_root / "registry.tracks.json")
+        if (workspace_root / "registry.tracks.json").exists()
+        else (str(workspace_root / "temp.noinclude.json") if (workspace_root / "temp.noinclude.json").exists() else None),
+        help="Path to registry JSON metadata file.",
+    )
+    parser.add_argument(
+        "--retrieval_model",
+        type=str,
+        default="google/siglip2-so400m-patch14-384",
+        help="Retrieval encoder model name.",
+    )
+    parser.add_argument(
+        "--reasoning_model",
+        type=str,
+        default="Qwen/Qwen3-VL-8B-Instruct",
+        help="VLM reasoning model for agentic mode (e.g. 'Qwen/Qwen3-VL-8B-Instruct', 'gemini-2.5-flash', 'openai-5.6').",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["direct", "agentic"],
+        default="direct",
+        help="Initial inference mode: 'direct' = fast vector search; 'agentic' = VLM reasoning pipeline.",
+    )
+    parser.add_argument(
+        "--top_k",
+        type=int,
+        default=5,
+        help="Number of top candidates to retrieve.",
+    )
+    parser.add_argument(
+        "--camera_id",
+        type=str,
+        default=None,
+        help="Optional camera identifier filter (e.g. 'cam_1').",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        help="Compute device: auto, cuda, mps, cpu.",
+    )
+    parser.add_argument(
+        "--report_file",
+        type=str,
+        default="inference_report.md",
+        help="Path to save markdown summary report file.",
     )
     return parser.parse_args()
 
 
-def camera_id_from_clip(clip_name: str) -> str:
-    """Derive a camera identifier from the clip stem (e.g. 'clip1' -> 'cam_1')."""
-    if clip_name.startswith("clip"):
-        num = clip_name[4:]
-        if num.isdigit():
-            return f"cam_{num}"
-    return clip_name
-
-
-def collect_crop_files(crops_dir: Path) -> list:
-    """Recursively collect all valid ReID crop images under crops_dir."""
-    crop_files = []
-    for p in crops_dir.glob("**/*"):
-        if not (p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}):
-            continue
-        match = FILENAME_REGEX.match(p.name)
-        if not match:
-            continue
-        try:
-            global_id = int(p.parent.name)
-        except ValueError:
-            continue
-        crop_files.append((p, global_id, match))
-    return crop_files
-
-
-def load_reid_metadata(reid_json_path: str) -> dict:
-    """Load metadata lookup dictionary from cleaned_reid.json."""
-    if not os.path.exists(reid_json_path):
-        logger.warning(
-            f"ReID JSON not found at {reid_json_path}. "
-            "Proceeding without bbox/class_label enrichment."
-        )
-        return {}
-
-    logger.info(f"Loading ReID metadata from {reid_json_path}...")
-    with open(reid_json_path, "r") as f:
-        data = json.load(f)
-
-    lookup = {}
-    for global_id_str, entries in data.items():
-        try:
-            global_id = int(global_id_str)
-        except ValueError:
-            continue
-        for entry in entries:
-            video = entry.get("video", "")
-            frame = entry.get("frame")
-            if video and frame is not None:
-                lookup[(global_id, video, int(frame))] = entry
-
-    logger.info(f"Loaded {len(lookup)} ReID metadata entries.")
-    return lookup
-
-
-def filter_candidates(candidates: list[dict], filters: dict) -> list[dict]:
-    """Filter candidates using metadata filters parsed from the query."""
-    filtered = []
-    for c in candidates:
-        keep = True
-        meta = c["metadata"]
-
-        if "camera_id" in filters:
-            # We support flexible matching (e.g. 'cam_1' vs 'cam1' vs '1')
-            q_cam = str(filters["camera_id"]).lower().replace("_", "").replace("cam", "")
-            c_cam = str(meta["camera_id"]).lower().replace("_", "").replace("cam", "")
-            if q_cam != c_cam:
-                keep = False
-
-        if "camera_timestamp_gte" in filters:
-            if meta["camera_timestamp"] < float(filters["camera_timestamp_gte"]):
-                keep = False
-
-        if "camera_timestamp_lt" in filters:
-            if meta["camera_timestamp"] >= float(filters["camera_timestamp_lt"]):
-                keep = False
-
-        if keep:
-            filtered.append(c)
-
-    return filtered
-
-
-def run_search_pipeline(
+def execute_direct_query(
     query_str: str,
-    candidates_db: list[dict],
-    encoder: BaseRetrievalEncoder,
-    reasoner: BaseVQAReasoner,
-    retrieval_k: int,
-    rerank_k: int,
-):
-    """Executes search and VQA reranking for a single query."""
-    # 1. Parse query for filters
-    parsed_query = parse_query(query_str)
-    semantic_text = parsed_query.semantic_text or query_str
-
-    print(f"\n{_BOLD}{_CYAN}🔍 SEARCH PIPELINE RUN{_RESET}")
-    print(f"{_CYAN}╪{'═' * 70}╪{_RESET}")
-    print(f"  {_BOLD}Raw Query      :{_RESET} {_CYAN}{query_str}{_RESET}")
-    print(f"  {_BOLD}Semantic Query :{_RESET} {semantic_text}")
-    if parsed_query.metadata_filters:
-        print(f"  {_BOLD}Filters        :{_RESET} {parsed_query.metadata_filters}")
-    print(f"{_CYAN}╪{'═' * 70}╪{_RESET}\n")
-
-    # 2. Encode text query
-    try:
-        query_embedding = encoder.encode_text(semantic_text)
-    except Exception as e:
-        logger.error(f"Failed to encode query text: {e}")
-        return
-
-    # 3. Compute cosine similarity & filter candidates
-    scored_candidates = []
-    for c in candidates_db:
-        sim = compute_cosine_similarity(query_embedding, c["embedding"])
-        scored_candidates.append({**c, "similarity": sim})
-
-    # Apply parsed metadata filters
-    if parsed_query.metadata_filters:
-        filtered_scored = filter_candidates(scored_candidates, parsed_query.metadata_filters)
-        print(
-            f"⚙️  {_BOLD}Applied filters:{_RESET} {len(scored_candidates)} -> {_GREEN}{len(filtered_scored)}{_RESET} candidates remaining."
-        )
-        scored_candidates = filtered_scored
-
-    # Sort and take top retrieval_k
-    scored_candidates.sort(key=lambda x: x["similarity"], reverse=True)
-    top_retrieved = scored_candidates[:retrieval_k]
-
-    if not top_retrieved:
-        print(f"⚠️  {_YELLOW}No candidates matched the query or filters.{_RESET}")
-        return
-
-    print(f"📡 {_BOLD}{_CYAN}Top {len(top_retrieved)} SigLIP2 Retrieval Candidates:{_RESET}")
-    print(f"{_DIM}  {'─' * 72}{_RESET}")
-    for idx, c in enumerate(top_retrieved, start=1):
-        similarity = c["similarity"]
-        filled = max(0, min(10, round(similarity * 10)))
-        bar = "█" * filled + "░" * (10 - filled)
-        sim_str = f"{bar} {similarity * 100:.1f}%"
-        print(
-            f"  {_BOLD}#{idx:<2}{_RESET} "
-            f"[{_GREEN}Cam:{_RESET} {c['metadata']['camera_id']:<6} | "
-            f"{_GREEN}Track ID:{_RESET} {c['metadata']['track_id']:<4} | "
-            f"{_GREEN}Time:{_RESET} {c['metadata']['camera_timestamp']:.2f}s] "
-            f"{_DIM}Score: {sim_str}{_RESET}\n"
-            f"      {_DIM}File: {c['filepath'].name}{_RESET}"
-        )
-    print(f"{_DIM}  {'─' * 72}{_RESET}\n")
-
-    # 4. Prep and run VQA reasoning
-    print(f"🧠 {_BOLD}{_MAGENTA}Running {reasoner.__class__.__name__} VQA Reranking...{_RESET}")
-    reasoning_candidates = []
-    for c in top_retrieved:
-        try:
-            # Load the frame
-            frame = Image.open(c["filepath"]).convert("RGB")
-            bbox = c["metadata"].get("bbox")
-            bbox_list = [float(v) for v in bbox.split(",")] if bbox else None
-
-            reasoning_candidates.append(
-                CandidateImage(
-                    camera_id=c["metadata"]["camera_id"],
-                    camera_timestamp=c["metadata"]["camera_timestamp"],
-                    video_pos_ms=c["metadata"]["video_pos_ms"],
-                    track_id=c["metadata"]["track_id"],
-                    bbox=bbox_list,
-                    frame=frame,
-                    retrieval_distance=1.0 - c["similarity"],
-                )
-            )
-        except Exception as e:
-            logger.error(f"Failed to load image candidate {c['filepath']}: {e}")
-
-    if not reasoning_candidates:
-        print(
-            f"❌ {_RED}Failed to prepare any candidate images for {reasoner.__class__.__name__}.{_RESET}"
-        )
-        return
-
-    # Run VQA Reranking
-    ranked_results = reasoner.answer(
-        query=semantic_text,
-        candidates=reasoning_candidates,
-        top_k=rerank_k,
+    vector_store: VectorStore,
+    retrieval_engine: RetrievalEngine,
+    top_k: int = 5,
+    camera_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Executes fast vector similarity search using RetrievalEngine."""
+    parsed, results = retrieval_engine.search(
+        query=query_str,
+        top_k=top_k,
+        camera_id=camera_id,
     )
 
-    # Print final Ranked Results
-    print(f"\n{_BOLD}{_GREEN}🏆 FINAL RANKED RESULTS ({reasoner.__class__.__name__}){_RESET}")
-    print(f"{_GREEN}╪{'═' * 70}╪{_RESET}")
-    if not ranked_results:
-        print(f"  {_YELLOW}No candidate verified by {reasoner.__class__.__name__}.{_RESET}")
-    else:
-        for idx, res in enumerate(ranked_results, start=1):
-            color = _GREEN if res.vlm_score > 0 else _YELLOW
-            status = "VERIFIED" if res.vlm_score > 0 else "REJECTED"
-            score_bar = (
-                "★" * int(res.vlm_score) + "☆" * (5 - int(res.vlm_score))
-                if 0 <= res.vlm_score <= 5
-                else f"Score: {res.vlm_score}"
-            )
+    console.print(f"\n[bold yellow]Parsed Semantic Query:[/bold yellow] '{parsed.semantic_text}'")
+    if parsed.metadata_filters:
+        console.print(f"[bold yellow]Metadata Filters Applied:[/bold yellow] {parsed.metadata_filters}")
 
-            print(
-                f"  {_BOLD}#{idx:<2}{_RESET} "
-                f"[{color}{status:<8}{_RESET}]  "
-                f"({_CYAN}{score_bar}{_RESET})  "
-                f"Cam: {_BOLD}{res.camera_id:<6}{_RESET} "
-                f"Track: {_BOLD}{res.track_id:<4}{_RESET} "
-                f"Time: {_BOLD}{res.camera_timestamp:.2f}s{_RESET}"
-            )
-            print(f"       {_DIM}Reasoning: {res.vlm_explanation}{_RESET}\n")
-    print(f"{_GREEN}╪{'═' * 70}╪{_RESET}\n")
+    formatted_results = []
+    table = Table(title=f"Search Results for '{query_str}'", box=box.ROUNDED)
+    table.add_column("Rank", style="bold cyan", justify="right")
+    table.add_column("Candidate ID", style="bold white", justify="left")
+    table.add_column("Camera ID", style="green", justify="center")
+    table.add_column("Track ID", style="magenta", justify="right")
+    table.add_column("Time Range", style="yellow", justify="left")
+    table.add_column("Distance (1-sim)", style="red", justify="right")
+    table.add_column("Class Label", style="blue", justify="center")
+
+    for rank, res in enumerate(results, start=1):
+        rec_info = None
+        if vector_store.conn_type == "npz":
+            for rec in vector_store.npz_records:
+                if rec["id"] == res.id:
+                    rec_info = rec
+                    break
+
+        meta = rec_info["metadata"] if rec_info else {}
+        class_lbl = meta.get("class_label", "object")
+        st_time = meta.get("start_time", res.camera_timestamp)
+        end_time = meta.get("end_time", st_time)
+
+        table.add_row(
+            str(rank),
+            res.id,
+            res.camera_id,
+            str(res.track_id),
+            f"{st_time:.2f}s - {end_time:.2f}s",
+            f"{res.distance:.4f}",
+            class_lbl,
+        )
+
+        formatted_results.append({
+            "rank": rank,
+            "id": res.id,
+            "camera_id": res.camera_id,
+            "track_id": res.track_id,
+            "global_id": meta.get("global_id", res.track_id),
+            "camera_timestamp": res.camera_timestamp,
+            "video_pos_ms": res.video_pos_ms,
+            "start_time": st_time,
+            "end_time": end_time,
+            "distance": res.distance,
+            "class_label": class_lbl,
+        })
+
+    console.print("\n")
+    console.print(Panel(table, border_style="cyan", expand=False))
+    return formatted_results
+
+
+def execute_agentic_query(
+    query_str: str,
+    pipeline: AgenticPlannerPipeline,
+    top_k: int = 5,
+    camera_id: Optional[str] = None,
+) -> tuple[List[Dict[str, Any]], List[Any]]:
+    """Executes full Agentic VLM reasoning pipeline with perception tools."""
+    console.print(f"\n[bold green]Executing Agentic VLM query:[/bold green] '{query_str}'")
+    results, trajectory = pipeline.query_with_trajectory(
+        query_text=query_str,
+        top_k=top_k,
+        camera_id=camera_id,
+    )
+
+    formatted_results = []
+    table = Table(title=f"Agentic VLM Pipeline Results for '{query_str}'", box=box.ROUNDED)
+    table.add_column("Rank", style="bold cyan", justify="right")
+    table.add_column("Camera ID", style="green", justify="center")
+    table.add_column("Global Track ID", style="magenta", justify="right")
+    table.add_column("Timestamp", style="yellow", justify="left")
+    table.add_column("VLM Score", style="bold green", justify="right")
+    table.add_column("VLM Explanation", style="white", justify="left")
+
+    for item in results:
+        table.add_row(
+            str(item.rank),
+            item.camera_id,
+            str(item.global_id),
+            item.timestamp_human,
+            f"{item.vlm_score:.2f}",
+            item.vlm_explanation or "Verified target match",
+        )
+        formatted_results.append(item.model_dump())
+
+    console.print("\n")
+    console.print(Panel(table, border_style="cyan", expand=False))
+
+    if trajectory:
+        console.print("\n[bold yellow]Agentic Reasoning Traces & Execution Steps:[/bold yellow]")
+        for step in trajectory:
+            console.print(f"\n[bold underline]Step {step.step_number}[/bold underline]: {step.thought.strip()}")
+            for call in step.tool_calls:
+                console.print(f"  [cyan]🔧 Tool Call [{call.call_id}]:[/cyan] {call.name}({call.arguments})")
+            for res in step.tool_results:
+                status_str = "[red]ERROR[/red]" if res.is_error else "[green]SUCCESS[/green]"
+                console.print(f"  [magenta]📥 Tool Result [{res.call_id}]:[/magenta] Status={status_str} | Content={res.content}")
+
+    return formatted_results, trajectory
+
+
+def print_help():
+    """Prints interactive shell commands help table."""
+    table = Table(title="Interactive Shell Commands", box=box.SIMPLE_HEAD)
+    table.add_column("Command / Syntax", style="bold cyan")
+    table.add_column("Description", style="white")
+    table.add_row("query_text", "Execute semantic search for target (e.g. 'blue bus on cam_1')")
+    table.add_row("mode direct / mode agentic", "Switch between fast vector search and VLM visual reasoning")
+    table.add_row("model <name>", "Switch VLM model (e.g. 'Qwen/Qwen3-VL-8B-Instruct', 'gemini-2.5-flash')")
+    table.add_row("top_k <int>", "Set candidate retrieval count (e.g. 'top_k 10')")
+    table.add_row("help / ?", "Show this command guide")
+    table.add_row("exit / quit / q", "Exit interactive shell")
+    console.print(table)
 
 
 def main():
     args = parse_args()
 
-    print(f"\n{_BOLD}{_CYAN}┌────────────────────────────────────────────────────────────┐{_RESET}")
-    print(f"{_BOLD}{_CYAN}│         CCTV Semantic Search & VQA Inference Node          │{_RESET}")
-    print(f"{_BOLD}{_CYAN}└────────────────────────────────────────────────────────────┘{_RESET}\n")
-
-    # Load ReID metadata lookup
-    metadata_lookup = load_reid_metadata(args.reid_json)
-
-    # 1. Initialize retrieval encoder
-    print(
-        f"🔧 {_BOLD}Initializing retrieval encoder:{_RESET} {_CYAN}{args.retrieval_model}{_RESET} on {_MAGENTA}{args.device}{_RESET}..."
+    console.print(
+        Panel.fit(
+            "[bold cyan]CCTV Semantic Search & Agentic VLM Interactive Shell[/bold cyan]\n"
+            f"[dim]Store Path: {args.npz_path or args.npz_dir or 'Default'}\n"
+            f"Retrieval Model: {args.retrieval_model} | Reasoning Model: {args.reasoning_model}\n"
+            f"Mode: {args.mode} | Top K: {args.top_k} | Device: {args.device}[/dim]",
+            box=box.ROUNDED,
+            border_style="cyan",
+        )
     )
+
+    # 1. Load VectorStore
+    console.print(f"[bold cyan]Connecting to VectorStore...[/bold cyan]")
+    vector_store = VectorStore(
+        npz_dir=args.npz_dir,
+        npz_path=args.npz_path,
+        json_path=args.json_path,
+    )
+    console.print(f"[bold green]Store Connection Type:[/bold green] '{vector_store.conn_type}'")
+    console.print(f"[bold green]Total Events Indexed:[/bold green] {vector_store.get_event_count()}\n")
+
+    if vector_store.get_event_count() == 0:
+        console.print("[bold red]Warning: VectorStore contains 0 events. Ensure .npz and .json files exist.[/bold red]")
+
+    # 2. Initialize Retrieval Encoder & RetrievalEngine
+    console.print(f"[bold cyan]Loading Retrieval Encoder ({args.retrieval_model})...[/bold cyan]")
     encoder = get_retrieval_encoder(model_name=args.retrieval_model, device=args.device)
-
-    # 2. Collect crop files
-    crops_dir = Path(args.crops_dir)
-    if not crops_dir.exists():
-        logger.error(f"Crops directory does not exist: {crops_dir}")
-        sys.exit(1)
-
-    print(f"🔍 {_BOLD}Scanning crops directory:{_RESET} {crops_dir}...")
-    crop_files = collect_crop_files(crops_dir)
-    print(
-        f"📊 {_BOLD}Found:{_RESET} {_GREEN}{len(crop_files)}{_RESET} crop images under the directory."
+    retrieval_engine = RetrievalEngine(
+        encoder=encoder,
+        vector_store=vector_store,
+        metadata_filter_enabled=True,
     )
 
-    if not crop_files:
-        logger.error("No valid crops found. Exiting.")
-        sys.exit(1)
+    # Lazy-loaded Agentic Pipeline components
+    pipeline: Optional[AgenticPlannerPipeline] = None
+    reasoner: Optional[Any] = None
 
-    # 3. Load & Encode all crops in-memory
-    print(f"\n🚀 {_BOLD}Encoding all crop images into memory embeddings...{_RESET}\n")
-    candidates_db = []
-    for filepath, global_id, match in tqdm(
-        crop_files,
-        desc="🧬 Encoding crops",
-        bar_format="{l_bar}{bar:30}{r_bar}{bar:-10b}",
-    ):
-        clip_name = match.group(1)
-        frame_idx = int(match.group(2))
-        timestamp_seconds = float(match.group(4))
-        camera_id = camera_id_from_clip(clip_name)
+    def get_agentic_pipeline() -> AgenticPlannerPipeline:
+        nonlocal pipeline, reasoner
+        if pipeline is None:
+            console.print(f"[bold cyan]Loading Agentic VLM Reasoner ({args.reasoning_model})...[/bold cyan]")
+            reasoner = get_vqa_reasoner(model_name=args.reasoning_model, device=args.device)
+            frame_extractor = FrameExtractor(video_sources={})
+            pipeline = AgenticPlannerPipeline(
+                retrieval_engine=retrieval_engine,
+                vector_store=vector_store,
+                frame_extractor=frame_extractor,
+                reasoner=reasoner,
+                max_planning_steps=5,
+            )
+        return pipeline
 
-        # Build metadata
-        metadata = {
-            "camera_id": camera_id,
-            "track_id": global_id,
-            "camera_timestamp": timestamp_seconds,
-            "video_pos_ms": timestamp_seconds * 1000.0,
-        }
-
-        # Enrich with cleaned_reid.json
-        video_filename = f"{clip_name}.mp4"
-        entry = metadata_lookup.get((global_id, video_filename, frame_idx), {})
-        if entry.get("bbox"):
-            metadata["bbox"] = ",".join(str(v) for v in entry["bbox"])
-        if entry.get("class_label"):
-            metadata["class_label"] = entry["class_label"]
-
-        # Encode image
-        try:
-            with Image.open(filepath) as img:
-                embedding = encoder.encode_image(img)
-        except Exception as e:
-            logger.error(f"Failed to encode {filepath}: {e}")
-            continue
-
-        candidates_db.append({"filepath": filepath, "embedding": embedding, "metadata": metadata})
-
-    print(
-        f"\n✅ {_BOLD}{_GREEN}Successfully encoded {len(candidates_db)} crops into memory.{_RESET}"
-    )
-
-    # 4. Initialize VQA Reasoner
-    print(
-        f"🤖 {_BOLD}Initializing VQA Reasoner:{_RESET} {_MAGENTA}{args.reasoning_model}{_RESET}..."
-    )
-    reasoner = get_vqa_reasoner(model_name=args.reasoning_model, device=args.device)
-
-    # 5. Handle Query input
+    # Single Query Execution Mode
     if args.query:
-        # Run single query mode
-        run_search_pipeline(
-            query_str=args.query,
-            candidates_db=candidates_db,
-            encoder=encoder,
-            reasoner=reasoner,
-            retrieval_k=args.retrieval_top_k,
-            rerank_k=args.rerank_top_k,
-        )
-    else:
-        # Interactive mode
-        print(f"\n{_BOLD}{_GREEN}✨ In-Memory Inference Pipeline Ready{_RESET}")
-        print(
-            f"{_DIM}Type your search query and press Enter. Type 'exit' or 'quit' to close.{_RESET}"
-        )
-        while True:
-            try:
-                query_str = input(f"\n{_BOLD}Query > {_RESET}").strip()
-                if not query_str:
-                    continue
-                if query_str.lower() in ("exit", "quit"):
-                    print("Exiting dry-run inference pipeline. Goodbye!")
-                    break
-                run_search_pipeline(
-                    query_str=query_str,
-                    candidates_db=candidates_db,
-                    encoder=encoder,
-                    reasoner=reasoner,
-                    retrieval_k=args.retrieval_top_k,
-                    rerank_k=args.rerank_top_k,
-                )
-            except KeyboardInterrupt:
-                print("\nExiting dry-run inference pipeline. Goodbye!")
+        console.print(f"[bold green]Executing single query in '{args.mode}' mode:[/bold green] '{args.query}'")
+        if args.mode == "direct":
+            execute_direct_query(
+                query_str=args.query,
+                vector_store=vector_store,
+                retrieval_engine=retrieval_engine,
+                top_k=args.top_k,
+                camera_id=args.camera_id,
+            )
+        else:
+            agentic_pipe = get_agentic_pipeline()
+            execute_agentic_query(
+                query_str=args.query,
+                pipeline=agentic_pipe,
+                top_k=args.top_k,
+                camera_id=args.camera_id,
+            )
+        return
+
+    # Interactive Shell Loop
+    console.print("[bold green]Interactive Shell Ready![/bold green] Type your search query or 'help' for options.")
+    current_mode = args.mode
+    current_top_k = args.top_k
+
+    while True:
+        try:
+            prompt_str = f"[bold cyan]CCTV-Agent[/bold cyan] [[yellow]{current_mode}[/yellow]] > "
+            user_input = Prompt.ask(prompt_str).strip()
+
+            if not user_input:
+                continue
+
+            cmd_lower = user_input.lower()
+
+            if cmd_lower in ("exit", "quit", "q"):
+                console.print("[bold yellow]Exiting interactive search session. Goodbye![/bold yellow]")
                 break
-            except Exception as e:
-                logger.error(f"Error during query execution: {e}")
+
+            if cmd_lower in ("help", "?"):
+                print_help()
+                continue
+
+            if cmd_lower.startswith("mode ") or cmd_lower.startswith("/mode "):
+                parts = user_input.split()
+                if len(parts) >= 2 and parts[1].lower() in ("direct", "agentic"):
+                    current_mode = parts[1].lower()
+                    console.print(f"[bold green]Switched mode to:[/bold green] '{current_mode}'")
+                else:
+                    current_mode = "agentic" if current_mode == "direct" else "direct"
+                    console.print(f"[bold green]Toggled mode to:[/bold green] '{current_mode}'")
+                continue
+
+            if cmd_lower.startswith("top_k ") or cmd_lower.startswith("topk "):
+                parts = user_input.split()
+                if len(parts) >= 2 and parts[1].isdigit():
+                    current_top_k = int(parts[1])
+                    console.print(f"[bold green]Updated top_k to:[/bold green] {current_top_k}")
+                continue
+
+            if cmd_lower.startswith("model ") or cmd_lower.startswith("/model "):
+                parts = user_input.split(maxsplit=1)
+                if len(parts) >= 2:
+                    args.reasoning_model = parts[1]
+                    pipeline = None  # Reset pipeline to reload new reasoner model
+                    console.print(f"[bold green]Updated reasoning model to:[/bold green] '{args.reasoning_model}'")
+                continue
+
+            # Execute Query
+            if current_mode == "direct":
+                execute_direct_query(
+                    query_str=user_input,
+                    vector_store=vector_store,
+                    retrieval_engine=retrieval_engine,
+                    top_k=current_top_k,
+                    camera_id=args.camera_id,
+                )
+            else:
+                agentic_pipe = get_agentic_pipeline()
+                execute_agentic_query(
+                    query_str=user_input,
+                    pipeline=agentic_pipe,
+                    top_k=current_top_k,
+                    camera_id=args.camera_id,
+                )
+
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[bold yellow]Session terminated. Goodbye![/bold yellow]")
+            break
+        except Exception as err:
+            console.print(f"[bold red]Error executing query:[/bold red] {err}")
 
 
 if __name__ == "__main__":

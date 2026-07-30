@@ -108,7 +108,7 @@ def parse_args():
         "--retrieval_model",
         type=str,
         default="openai/clip-vit-large-patch14",
-        help="Retrieval encoder model to use (default: google/siglip2-base-patch16-224)",
+        help="Retrieval encoder model to use (default: google/siglip2-so400m-patch14-384)",
     )
     parser.add_argument(
         "--device",

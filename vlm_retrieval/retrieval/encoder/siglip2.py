@@ -17,7 +17,7 @@ class SigLIP2Encoder(BaseRetrievalEncoder):
 
     def __init__(
         self,
-        model_name: str = "google/siglip2-base-patch16-224",
+        model_name: str = "google/siglip2-so400m-patch14-384",
         device: str = "auto",
     ) -> None:
         self.logger = setup_logger("SigLIP2Encoder")

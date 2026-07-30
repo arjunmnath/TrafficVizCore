@@ -566,8 +566,8 @@ def main() -> None:
         "-m",
         "--model-name",
         type=str,
-        default="google/siglip2-base-patch16-224",
-        help="Encoder model name (default: google/siglip2-base-patch16-224)",
+        default="google/siglip2-so400m-patch14-384",
+        help="Encoder model name (default: google/siglip2-so400m-patch14-384)",
     )
     parser.add_argument(
         "-d",
