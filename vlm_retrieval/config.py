@@ -24,6 +24,7 @@ class VLMRetrievalConfig(BaseModel):
     metadata_filter_enabled: bool = True
 
     device: str = "auto"  # "auto", "cuda", "mps", "cpu"
+    device_map: str = "balanced"  # "balanced", "auto", "sequential"
 
 
 # Backwards compatibility alias

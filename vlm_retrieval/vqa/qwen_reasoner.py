@@ -21,21 +21,23 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
         self,
         model_name: str = "Qwen/Qwen3-VL-8B-Instruct",
         device: str = "auto",
+        device_map: str = "balanced",
     ) -> None:
         self.logger = setup_logger("Qwen3VLAgenticReasoner")
         self.model_name = model_name
         self.device = self._resolve_device(device)
+        self.device_map = device_map
         self.processor = None
         self.model = None
         self.logger.info(
-            f"Initialized Qwen3VLAgenticReasoner for '{model_name}' on device '{self.device}'"
+            f"Initialized Qwen3VLAgenticReasoner for '{model_name}' on device '{self.device}' (device_map='{self.device_map}')"
         )
 
     def _load_model(self) -> None:
         if self.model is not None:
             return
 
-        self.logger.info(f"Loading Hugging Face model '{self.model_name}' on {self.device}...")
+        self.logger.info(f"Loading Hugging Face model '{self.model_name}' on {self.device} (device_map={self.device_map})...")
         try:
             from transformers import (
                 AutoProcessor,
@@ -46,12 +48,18 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
             dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
             self.processor = AutoProcessor.from_pretrained(self.model_name, trust_remote_code=True)
 
-            device_map = self.device if self.device in ("cuda", "mps", "auto") else None
+            if torch.cuda.is_available():
+                resolved_device_map = self.device_map or "balanced"
+            elif self.device in ("cuda", "mps", "auto", "balanced"):
+                resolved_device_map = self.device_map if self.device_map else self.device
+            else:
+                resolved_device_map = None
+
             try:
                 self.model = AutoModelForImageTextToText.from_pretrained(
                     self.model_name,
                     dtype=dtype,
-                    device_map=device_map,
+                    device_map=resolved_device_map,
                     trust_remote_code=True,
                 )
             except Exception as inner_err:
@@ -61,7 +69,7 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
                 self.model = Qwen3VLForConditionalGeneration.from_pretrained(
                     self.model_name,
                     dtype=dtype,
-                    device_map=device_map,
+                    device_map=resolved_device_map,
                     trust_remote_code=True,
                 )
             if self.device == "cpu":

@@ -6,7 +6,9 @@ from vlm_retrieval.vqa.base import BaseAgenticVLMReasoner
 
 
 def get_vqa_reasoner(
-    model_name: str = "Qwen/Qwen3-VL-8B-Instruct", device: str = "auto"
+    model_name: str = "Qwen/Qwen3-VL-8B-Instruct",
+    device: str = "auto",
+    device_map: str = "balanced",
 ) -> BaseAgenticVLMReasoner:
     """Factory to resolve a model name to its respective Agentic VLM Reasoner adapter.
 
@@ -15,6 +17,7 @@ def get_vqa_reasoner(
           - API models: 'openai-5.6', 'gpt-4o', 'gemini-2.5-flash', 'gemini-1.5-pro'
           - On-device models: 'Qwen/Qwen3-VL-8B-Instruct', 'Qwen/Qwen2.5-VL-7B-Instruct'
         device: Device to load local models on ("auto", "cuda", "mps", "cpu")
+        device_map: Multi-GPU allocation strategy ("balanced", "auto", "sequential", etc.)
 
     Returns:
         An instance of BaseAgenticVLMReasoner
@@ -34,7 +37,7 @@ def get_vqa_reasoner(
     elif "qwen" in model_name_lower:
         from vlm_retrieval.vqa.qwen_reasoner import Qwen3VLAgenticReasoner
 
-        return Qwen3VLAgenticReasoner(model_name=model_name, device=device)
+        return Qwen3VLAgenticReasoner(model_name=model_name, device=device, device_map=device_map)
 
     else:
         raise ValueError(
