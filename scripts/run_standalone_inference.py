@@ -297,138 +297,162 @@ def generate_markdown_report(
     report_path: Path,
     trajectory: Optional[List[Any]] = None,
 ):
-    """Generate a clean Markdown summary report including full reasoning traces and tool call results."""
+    """Generate a clean Markdown summary report using Jinja2 template engine."""
     import datetime
+    import jinja2
 
     timestamp_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    md_lines = []
-    md_lines.append("# Standalone CCTV Inference Report\n")
-    md_lines.append(f"**Generated:** {timestamp_str}  ")
-    md_lines.append(f"**Query:** `{args.query}`  ")
-    md_lines.append(f"**Mode:** `{args.mode}`  ")
-    md_lines.append(f"**Store Type:** `{vector_store.conn_type}`  ")
-    md_lines.append(f"**Total Events Indexed:** `{vector_store.get_event_count()}`  ")
-    md_lines.append(f"**Retrieval Encoder:** `{args.retrieval_model}`  ")
-    md_lines.append(f"**Reasoning Model:** `{args.reasoning_model}`  \n")
-
+    formatted_trajectory = []
     if trajectory:
-        md_lines.append("## Agentic VLM Reasoning Traces & Tool Execution\n")
         for step in trajectory:
-            step_num = getattr(step, "step_number", 1)
-            thought = getattr(step, "thought", "")
-            tool_calls = getattr(step, "tool_calls", [])
-            tool_results = getattr(step, "tool_results", [])
+            formatted_trajectory.append({
+                "step_number": getattr(step, "step_number", 1),
+                "thought": getattr(step, "thought", "").strip(),
+                "tool_calls": [
+                    {
+                        "call_id": getattr(call, "call_id", ""),
+                        "name": getattr(call, "name", ""),
+                        "arguments": getattr(call, "arguments", {}),
+                    }
+                    for call in getattr(step, "tool_calls", [])
+                ],
+                "tool_results": [
+                    {
+                        "call_id": getattr(res, "call_id", ""),
+                        "name": getattr(res, "name", ""),
+                        "content": getattr(res, "content", {}),
+                        "is_error": getattr(res, "is_error", False),
+                        "has_images": len(getattr(res, "extracted_images", [])) > 0,
+                    }
+                    for res in getattr(step, "tool_results", [])
+                ],
+            })
 
-            md_lines.append(f"### Step {step_num}: Agent Thought\n")
-            md_lines.append(f"> {thought.strip()}\n")
+    template_str = """# Standalone CCTV Inference Report
 
-            if tool_calls:
-                md_lines.append("#### Tool Calls\n")
-                for call in tool_calls:
-                    cid = getattr(call, "call_id", "")
-                    name = getattr(call, "name", "")
-                    args_dict = getattr(call, "arguments", {})
-                    md_lines.append(f"- **`{name}`** (ID: `{cid}`)")
-                    md_lines.append("  ```json")
-                    md_lines.append(json.dumps(args_dict, indent=2))
-                    md_lines.append("  ```\n")
+**Generated:** {{ timestamp_str }}  
+**Query:** `{{ query }}`  
+**Mode:** `{{ mode }}`  
+**Store Type:** `{{ store_type }}`  
+**Total Events Indexed:** `{{ total_events }}`  
+**Retrieval Encoder:** `{{ retrieval_model }}`  
+**Reasoning Model:** `{{ reasoning_model }}`  
 
-            if tool_results:
-                md_lines.append("#### Tool Execution Results\n")
-                for res in tool_results:
-                    cid = getattr(res, "call_id", "")
-                    name = getattr(res, "name", "")
-                    content = getattr(res, "content", {})
-                    is_err = getattr(res, "is_error", False)
-                    img_attached = len(getattr(res, "extracted_images", [])) > 0
+{% if trajectory %}
+## Agentic VLM Reasoning Traces & Tool Execution
 
-                    status_tag = "FAILED" if is_err else "SUCCESS"
-                    md_lines.append(f"- **`{name}`** (ID: `{cid}`, Status: `{status_tag}`, Images Attached: `{img_attached}`)")
-                    md_lines.append("  ```json")
-                    try:
-                        md_lines.append(json.dumps(content, indent=2, default=str))
-                    except Exception:
-                        md_lines.append(str(content))
-                    md_lines.append("  ```\n")
+{% for step in trajectory %}
+### Step {{ step.step_number }}: Agent Thought
 
-    md_lines.append("## Search Results Summary\n")
-    if not results:
-        md_lines.append("_No matching results found._\n")
-    else:
-        if args.mode == "direct":
-            md_lines.append("| Rank | Candidate ID | Camera | Track ID | Time Range | Distance (1-sim) | Class Label |")
-            md_lines.append("| --- | --- | --- | --- | --- | --- | --- |")
-            for item in results:
-                rank = item.get("rank")
-                cid = item.get("id")
-                cam = item.get("camera_id")
-                tid = item.get("track_id")
-                st = item.get("start_time", 0.0)
-                et = item.get("end_time", st)
-                dist = item.get("distance", 1.0)
-                cls = item.get("class_label", "object")
-                md_lines.append(f"| {rank} | `{cid}` | `{cam}` | `{tid}` | {st:.2f}s - {et:.2f}s | {dist:.4f} | `{cls}` |")
-        else:
-            md_lines.append("| Rank | Camera | Global ID | Timestamp (Human) | VLM Score | Explanation |")
-            md_lines.append("| --- | --- | --- | --- | --- | --- |")
-            for item in results:
-                rank = item.get("rank")
-                cam = item.get("camera_id")
-                gid = item.get("global_id")
-                ts_h = item.get("timestamp_human")
-                score = item.get("vlm_score", 0.0)
-                exp = item.get("vlm_explanation", "N/A")
-                md_lines.append(f"| {rank} | `{cam}` | `{gid}` | {ts_h} | {score:.2f} | {exp} |")
+> {{ step.thought }}
 
-        md_lines.append("\n## Candidate Details & Track Embeddings\n")
-        for item in results:
-            rank = item.get("rank", 1)
-            cid = item.get("id", item.get("global_id"))
-            cam = item.get("camera_id")
-            tid = item.get("track_id", item.get("global_id"))
-            cls = item.get("class_label", "object")
-            st = item.get("start_time", item.get("timestamp", 0.0))
-            et = item.get("end_time", st)
+{% if step.tool_calls %}
+#### Tool Calls
 
-            md_lines.append(f"### #{rank} Candidate `{cid}` (Camera: `{cam}`, Track: `{tid}`)\n")
-            md_lines.append(f"- **Class Label:** `{cls}`")
-            md_lines.append(f"- **Time Range:** `{st:.2f}s` to `{et:.2f}s` (`{item.get('video_pos_ms', 0):.0f} ms`)")
+{% for call in step.tool_calls %}
+- **`{{ call.name }}`** (ID: `{{ call.call_id }}`)
+```json
+{{ call.arguments | to_pretty_json }}
+```
 
-            if "distance" in item:
-                md_lines.append(f"- **Retrieval Distance:** `{item['distance']:.4f}`")
-            if "vlm_score" in item:
-                md_lines.append(f"- **VLM Verification Score:** `{item['vlm_score']:.2f}`")
-                md_lines.append(f"- **VLM Explanation:** {item.get('vlm_explanation')}")
+{% endfor %}
+{% endif %}
+{% if step.tool_results %}
+#### Tool Execution Results
 
-            ret_emb = item.get("retrieval_embedding")
-            app_emb = item.get("appearance_embedding")
-            if ret_emb:
-                md_lines.append(f"- **Retrieval Embedding (Encoder):** {len(ret_emb)}-dim vector")
-            if app_emb:
-                md_lines.append(f"- **Appearance Embedding (ReID):** {len(app_emb)}-dim vector")
+{% for res in step.tool_results %}
+- **`{{ res.name }}`** (ID: `{{ res.call_id }}`, Status: `{{ 'FAILED' if res.is_error else 'SUCCESS' }}`, Images Attached: `{{ res.has_images }}`)
+```json
+{{ res.content | to_pretty_json }}
+```
 
-            track_det = item.get("track_details")
-            if isinstance(track_det, dict) and track_det:
-                md_lines.append("- **Registry Track Details:**")
-                comp_tr = track_det.get("compressed_track") or {}
-                if comp_tr:
-                    md_lines.append(f"  - **Compressed Track Class:** `{comp_tr.get('class')}`")
-                    traj = comp_tr.get("trajectory")
-                    if isinstance(traj, dict):
-                        md_lines.append(f"  - **Trajectory Segments:** `{len(traj.get('segments', []))}`")
-                occs = track_det.get("occurrences")
-                if isinstance(occs, list):
-                    md_lines.append(f"  - **Occurrences Count:** `{len(occs)}` frames")
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+## Search Results Summary
 
-            md_lines.append("")
+{% if not results %}
+_No matching results found._
+{% elif mode == "direct" %}
+| Rank | Candidate ID | Camera | Track ID | Time Range | Distance (1-sim) | Class Label |
+| --- | --- | --- | --- | --- | --- | --- |
+{% for item in results %}
+| {{ item.rank }} | `{{ item.id }}` | `{{ item.camera_id }}` | `{{ item.track_id }}` | {{ "%.2f"|format(item.start_time or 0.0) }}s - {{ "%.2f"|format(item.end_time or item.start_time or 0.0) }}s | {{ "%.4f"|format(item.distance if item.distance is not none else 1.0) }} | `{{ item.class_label or "object" }}` |
+{% endfor %}
+{% else %}
+| Rank | Camera | Global ID | Timestamp (Human) | VLM Score | Explanation |
+| --- | --- | --- | --- | --- | --- |
+{% for item in results %}
+| {{ item.rank }} | `{{ item.camera_id }}` | `{{ item.global_id }}` | {{ item.timestamp_human }} | {{ "%.2f"|format(item.vlm_score or 0.0) }} | {{ item.vlm_explanation or "N/A" }} |
+{% endfor %}
+{% endif %}
+
+## Candidate Details & Track Embeddings
+
+{% for item in results %}
+### #{{ item.rank or loop.index }} Candidate `{{ item.id or item.global_id }}` (Camera: `{{ item.camera_id }}`, Track: `{{ item.track_id or item.global_id }}`)
+
+- **Class Label:** `{{ item.class_label or "object" }}`
+- **Time Range:** `{{ "%.2f"|format(item.start_time or item.timestamp or 0.0) }}s` to `{{ "%.2f"|format(item.end_time or item.start_time or item.timestamp or 0.0) }}s` (`{{ "%.0f"|format(item.video_pos_ms or 0) }} ms`)
+{% if item.distance is defined and item.distance is not none %}
+- **Retrieval Distance:** `{{ "%.4f"|format(item.distance) }}`
+{% endif %}
+{% if item.vlm_score is defined and item.vlm_score is not none %}
+- **VLM Verification Score:** `{{ "%.2f"|format(item.vlm_score) }}`
+- **VLM Explanation:** {{ item.vlm_explanation }}
+{% endif %}
+{% if item.retrieval_embedding %}
+- **Retrieval Embedding (Encoder):** {{ item.retrieval_embedding | length }}-dim vector
+{% endif %}
+{% if item.appearance_embedding %}
+- **Appearance Embedding (ReID):** {{ item.appearance_embedding | length }}-dim vector
+{% endif %}
+{% if item.track_details %}
+- **Registry Track Details:**
+{% if item.track_details.compressed_track %}
+  - **Compressed Track Class:** `{{ item.track_details.compressed_track.class }}`
+{% if item.track_details.compressed_track.trajectory and item.track_details.compressed_track.trajectory.segments %}
+  - **Trajectory Segments:** `{{ item.track_details.compressed_track.trajectory.segments | length }}`
+{% endif %}
+{% endif %}
+{% if item.track_details.occurrences %}
+  - **Occurrences Count:** `{{ item.track_details.occurrences | length }}` frames
+{% endif %}
+{% endif %}
+
+{% endfor %}
+"""
+
+    def to_pretty_json(val):
+        try:
+            return json.dumps(val, indent=2, default=str)
+        except Exception:
+            return str(val)
+
+    env = jinja2.Environment(trim_blocks=True, lstrip_blocks=True)
+    env.filters["to_pretty_json"] = to_pretty_json
+
+    rendered_report = env.from_string(template_str).render(
+        timestamp_str=timestamp_str,
+        query=args.query,
+        mode=args.mode,
+        store_type=vector_store.conn_type,
+        total_events=vector_store.get_event_count(),
+        retrieval_model=args.retrieval_model,
+        reasoning_model=args.reasoning_model,
+        trajectory=formatted_trajectory,
+        results=results,
+    )
 
     report_path = report_path.resolve()
     report_path.parent.mkdir(parents=True, exist_ok=True)
     with open(report_path, "w") as f:
-        f.write("\n".join(md_lines))
+        f.write(rendered_report)
 
     console.print(f"\n[bold green]Generated summary report at:[/bold green] [cyan]{report_path}[/cyan]\n")
+
 
 
 def main():
