@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -650,7 +651,13 @@ class VectorStore:
 
                         doc_id = str(ids[i]) if ids is not None and i < len(ids) else f"npz_{npz_file.stem}_{i}"
                         cam_id = str(meta_dict.get("camera_id", "cam_1"))
-                        track_id = int(meta_dict.get("track_id", i))
+                        raw_tid = meta_dict.get("track_id", i)
+                        try:
+                            track_id = int(raw_tid)
+                        except (ValueError, TypeError):
+                            # Extract numeric digits if present, else keep raw_tid as string
+                            match = re.search(r"(\d+)$", str(raw_tid))
+                            track_id = int(match.group(1)) if match else str(raw_tid)
                         start_time = float(meta_dict.get("start_time", meta_dict.get("camera_timestamp", 0.0)))
 
                         rec = {

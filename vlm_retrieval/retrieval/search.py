@@ -89,11 +89,20 @@ class RetrievalEngine:
     @staticmethod
     def _to_retrieval_result(item: dict) -> RetrievalResult:
         meta = item.get("metadata", {})
+        raw_tid = meta.get("track_id", 0)
+        parsed_tid = 0
+        try:
+            parsed_tid = int(raw_tid)
+        except (ValueError, TypeError):
+            import re
+            match = re.search(r"(\d+)$", str(raw_tid))
+            parsed_tid = int(match.group(1)) if match else 0
+
         return RetrievalResult(
             id=item["id"],
             camera_id=str(meta.get("camera_id", "")),
             camera_timestamp=float(meta.get("camera_timestamp", meta.get("timestamp", 0.0))),
-            track_id=int(meta.get("track_id", 0)),
+            track_id=parsed_tid,
             video_pos_ms=float(meta.get("video_pos_ms", 0.0)),
             bbox=meta.get("bbox"),
             video_path=meta.get("video_path"),
