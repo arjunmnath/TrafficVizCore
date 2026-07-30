@@ -128,6 +128,13 @@ def parse_args():
         default=None,
         help="Path to save search results summary JSON.",
     )
+    parser.add_argument(
+        "--report_file",
+        "--report",
+        type=str,
+        default="inference_report.md",
+        help="Path to save markdown summary report file (default: 'inference_report.md').",
+    )
     return parser.parse_args()
 
 
@@ -271,6 +278,101 @@ def run_agentic_inference(args, vector_store: VectorStore) -> List[Dict[str, Any
     return formatted_results
 
 
+def generate_markdown_report(args, vector_store: VectorStore, results: List[Dict[str, Any]], report_path: Path):
+    """Generate a clean Markdown summary report at the end of the standalone inference run."""
+    import datetime
+
+    timestamp_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    md_lines = []
+    md_lines.append("# Standalone CCTV Inference Report\n")
+    md_lines.append(f"**Generated:** {timestamp_str}  ")
+    md_lines.append(f"**Query:** `{args.query}`  ")
+    md_lines.append(f"**Mode:** `{args.mode}`  ")
+    md_lines.append(f"**Store Type:** `{vector_store.conn_type}`  ")
+    md_lines.append(f"**Total Events Indexed:** `{vector_store.get_event_count()}`  ")
+    md_lines.append(f"**Retrieval Encoder:** `{args.retrieval_model}`  ")
+    md_lines.append(f"**Reasoning Model:** `{args.reasoning_model}`  \n")
+
+    md_lines.append("## Search Results Summary\n")
+    if not results:
+        md_lines.append("_No matching results found._\n")
+    else:
+        if args.mode == "direct":
+            md_lines.append("| Rank | Candidate ID | Camera | Track ID | Time Range | Distance (1-sim) | Class Label |")
+            md_lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+            for item in results:
+                rank = item.get("rank")
+                cid = item.get("id")
+                cam = item.get("camera_id")
+                tid = item.get("track_id")
+                st = item.get("start_time", 0.0)
+                et = item.get("end_time", st)
+                dist = item.get("distance", 1.0)
+                cls = item.get("class_label", "object")
+                md_lines.append(f"| {rank} | `{cid}` | `{cam}` | `{tid}` | {st:.2f}s - {et:.2f}s | {dist:.4f} | `{cls}` |")
+        else:
+            md_lines.append("| Rank | Camera | Global ID | Timestamp (Human) | VLM Score | Explanation |")
+            md_lines.append("| --- | --- | --- | --- | --- | --- |")
+            for item in results:
+                rank = item.get("rank")
+                cam = item.get("camera_id")
+                gid = item.get("global_id")
+                ts_h = item.get("timestamp_human")
+                score = item.get("vlm_score", 0.0)
+                exp = item.get("vlm_explanation", "N/A")
+                md_lines.append(f"| {rank} | `{cam}` | `{gid}` | {ts_h} | {score:.2f} | {exp} |")
+
+        md_lines.append("\n## Candidate Details & Track Embeddings\n")
+        for item in results:
+            rank = item.get("rank", 1)
+            cid = item.get("id", item.get("global_id"))
+            cam = item.get("camera_id")
+            tid = item.get("track_id", item.get("global_id"))
+            cls = item.get("class_label", "object")
+            st = item.get("start_time", item.get("timestamp", 0.0))
+            et = item.get("end_time", st)
+
+            md_lines.append(f"### #{rank} Candidate `{cid}` (Camera: `{cam}`, Track: `{tid}`)\n")
+            md_lines.append(f"- **Class Label:** `{cls}`")
+            md_lines.append(f"- **Time Range:** `{st:.2f}s` to `{et:.2f}s` (`{item.get('video_pos_ms', 0):.0f} ms`)")
+
+            if "distance" in item:
+                md_lines.append(f"- **Retrieval Distance:** `{item['distance']:.4f}`")
+            if "vlm_score" in item:
+                md_lines.append(f"- **VLM Verification Score:** `{item['vlm_score']:.2f}`")
+                md_lines.append(f"- **VLM Explanation:** {item.get('vlm_explanation')}")
+
+            ret_emb = item.get("retrieval_embedding")
+            app_emb = item.get("appearance_embedding")
+            if ret_emb:
+                md_lines.append(f"- **Retrieval Embedding (Encoder):** {len(ret_emb)}-dim vector")
+            if app_emb:
+                md_lines.append(f"- **Appearance Embedding (ReID):** {len(app_emb)}-dim vector")
+
+            track_det = item.get("track_details")
+            if isinstance(track_det, dict) and track_det:
+                md_lines.append("- **Registry Track Details:**")
+                comp_tr = track_det.get("compressed_track") or {}
+                if comp_tr:
+                    md_lines.append(f"  - **Compressed Track Class:** `{comp_tr.get('class')}`")
+                    traj = comp_tr.get("trajectory")
+                    if isinstance(traj, dict):
+                        md_lines.append(f"  - **Trajectory Segments:** `{len(traj.get('segments', []))}`")
+                occs = track_det.get("occurrences")
+                if isinstance(occs, list):
+                    md_lines.append(f"  - **Occurrences Count:** `{len(occs)}` frames")
+
+            md_lines.append("")
+
+    report_path = report_path.resolve()
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(report_path, "w") as f:
+        f.write("\n".join(md_lines))
+
+    console.print(f"\n[bold green]Generated summary report at:[/bold green] [cyan]{report_path}[/cyan]\n")
+
+
 def main():
     args = parse_args()
 
@@ -317,7 +419,11 @@ def main():
         }
         with open(out_path, "w") as f:
             json.dump(summary_payload, f, indent=2)
-        console.print(f"\n[bold green]Saved results to:[/bold green] {out_path}\n")
+        console.print(f"\n[bold green]Saved JSON results to:[/bold green] {out_path}")
+
+    # Generate Markdown Summary Report
+    if args.report_file:
+        generate_markdown_report(args, vector_store, results, Path(args.report_file))
 
 
 if __name__ == "__main__":

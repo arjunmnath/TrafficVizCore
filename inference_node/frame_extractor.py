@@ -4,17 +4,45 @@ from typing import Optional, Tuple
 from shared.utils import setup_logger
 
 
+from pathlib import Path
+
 class FrameExtractor:
     """Extracts frames from video files given a camera ID and video position."""
 
-    def __init__(self, video_sources: dict):
+    def __init__(self, video_sources: Optional[dict] = None):
         """
         Args:
             video_sources: Mapping of camera_id -> absolute path to video file.
         """
         self.logger = setup_logger("FrameExtractor")
-        self.video_sources = video_sources
-        self.logger.info(f"Configured video sources: {list(video_sources.keys())}")
+        self.video_sources = dict(video_sources) if video_sources else {}
+        self._auto_discover_video_sources()
+        self.logger.info(f"Configured video sources: {self.video_sources}")
+
+    def _auto_discover_video_sources(self) -> None:
+        """Auto-discover videos in workspace input_vids/ and map to cam_1, cam_2, etc."""
+        workspace_root = Path(__file__).resolve().parent.parent
+        search_dirs = [workspace_root / "input_vids", workspace_root / "dataset"]
+
+        for sdir in search_dirs:
+            if not sdir.exists():
+                continue
+            # Sort files so primary clip1.mp4 is prioritized over clip1_tracks.mp4
+            video_files = sorted(list(sdir.glob("*.mp4")) + list(sdir.glob("*.avi")) + list(sdir.glob("*.mov")))
+            for vfile in video_files:
+                name = vfile.name
+                stem = vfile.stem
+
+                if name not in self.video_sources:
+                    self.video_sources[name] = str(vfile.resolve())
+                if stem not in self.video_sources:
+                    self.video_sources[stem] = str(vfile.resolve())
+
+                # Map clip1.mp4 -> cam_1, clip2.mp4 -> cam_2
+                if stem.startswith("clip") and stem[4:].isdigit():
+                    cam_key = f"cam_{stem[4:]}"
+                    if cam_key not in self.video_sources:
+                        self.video_sources[cam_key] = str(vfile.resolve())
 
     def extract_frame(
         self,
@@ -33,6 +61,15 @@ class FrameExtractor:
             Tuple of (full_frame, cropped_region) as PIL Images. Either may be None.
         """
         path = self.video_sources.get(camera_id)
+        if not path:
+            if camera_id.startswith("cam_") and camera_id[4:].isdigit():
+                num = camera_id[4:]
+                workspace_root = Path(__file__).resolve().parent.parent
+                cand_path = workspace_root / "input_vids" / f"clip{num}.mp4"
+                if cand_path.exists():
+                    path = str(cand_path.resolve())
+                    self.video_sources[camera_id] = path
+
         if not path:
             self.logger.warning(f"No video source for camera {camera_id}")
             return None, None

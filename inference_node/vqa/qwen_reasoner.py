@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
+import torch
+
 if TYPE_CHECKING:
     from inference_node.tools import InferenceToolRegistry
 from inference_node.vqa.base import BaseAgenticVLMReasoner
