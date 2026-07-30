@@ -167,6 +167,9 @@ class IntraCameraTrajectoryFusionStage(PostProcessingStage):
         candidates = self._buffered_tracks.get(key, [])
         best_candidate: Optional[TerminatedTrack] = None
         best_score = -1.0
+        best_sim = 0.0
+        best_dist = 0.0
+        best_time_gap = 0.0
 
         for candidate in candidates:
             if candidate.track_id == track.track_id:
@@ -208,12 +211,19 @@ class IntraCameraTrajectoryFusionStage(PostProcessingStage):
             if score > best_score:
                 best_score = score
                 best_candidate = candidate
+                best_sim = sim
+                best_dist = dist
+                best_time_gap = time_gap
 
         if best_candidate is not None:
             master_id = best_candidate.master_track_id or best_candidate.track_id
             track.master_track_id = master_id
             track.extra["master_track_id"] = master_id
             track.extra["fused_with_track_id"] = best_candidate.track_id
+            track.extra["fusion_similarity"] = float(best_sim)
+            track.extra["fusion_spatial_dist"] = float(best_dist)
+            track.extra["fusion_time_gap"] = float(best_time_gap)
+            track.extra["intra_camera_fused"] = True
 
             # Merge track history, appearance embeddings, and re-fuse
             self._merge_tracks(best_candidate, track)

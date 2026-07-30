@@ -5,7 +5,7 @@ from tracking.domain.metadata import TrackMetadata
 from tracking.domain.segments import ConstantSegment, LinearSegment, CubicSplineSegment
 from tracking.domain.size_models import ConstantModel, LinearModel, PolynomialModel, SplineModel
 from tracking.domain.trajectory import PiecewiseTrajectory
-from tracking.domain.track import TimeModel, Statistics, CompressedTrack
+from tracking.domain.track import TimeModel, Statistics, CompressedTrack, ConfidenceModel
 
 
 class JsonDeserializer:
@@ -104,7 +104,22 @@ class JsonDeserializer:
         # 4. Deserialize SizeModel
         size_model = cls._deserialize_size_model(data["width_model"], data["height_model"])
 
-        # 5. Deserialize Statistics
+        # 5. Deserialize ConfidenceModel
+        conf_model_data = data.get("confidence_model")
+        if conf_model_data and "timestamps" in conf_model_data and "confidences" in conf_model_data:
+            confidence_model = ConfidenceModel(
+                timestamps=conf_model_data["timestamps"],
+                confidences=conf_model_data["confidences"],
+                frames=conf_model_data.get("frames"),
+            )
+        else:
+            confidence_model = ConfidenceModel(
+                timestamps=time_model.timestamps,
+                confidences=[1.0] * len(time_model.timestamps),
+                frames=time_model.frames,
+            )
+
+        # 6. Deserialize Statistics
         stats_data = data.get("statistics", {})
         statistics = Statistics(
             avg_speed=stats_data.get("avg_speed", 0.0),
@@ -119,6 +134,7 @@ class JsonDeserializer:
             size_model=size_model,
             trajectory=trajectory,
             statistics=statistics,
+            confidence_model=confidence_model,
         )
 
     @classmethod

@@ -71,9 +71,9 @@ class AgenticPlannerPipeline:
 
         results: List[QueryResultItem] = []
         for index, result in enumerate(final_ranked):
-            ts_human = datetime.fromtimestamp(
-                result.camera_timestamp, tz=timezone.utc
-            ).strftime("%Y-%m-%d %H:%M:%S UTC")
+            ts_human = datetime.fromtimestamp(result.camera_timestamp, tz=timezone.utc).strftime(
+                "%Y-%m-%d %H:%M:%S UTC"
+            )
 
             thumbnail = None
             if result.frame:

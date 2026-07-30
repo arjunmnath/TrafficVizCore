@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-import torch
-
-from inference_node.tools import InferenceToolRegistry
+if TYPE_CHECKING:
+    from inference_node.tools import InferenceToolRegistry
 from inference_node.vqa.base import BaseAgenticVLMReasoner
 from inference_node.vqa.types import AgenticPlanStep, RankedResult, ToolCallSpec, ToolResult
 from shared.utils import setup_logger
@@ -65,9 +64,7 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
         max_steps: int = 5,
         camera_id_filter: Optional[str] = None,
     ) -> Tuple[List[AgenticPlanStep], List[RankedResult]]:
-        self.logger.info(
-            f"Starting on-device agentic planning with Qwen3-VL for query: '{query}'"
-        )
+        self.logger.info(f"Starting on-device agentic planning with Qwen3-VL for query: '{query}'")
 
         try:
             self._load_model()
@@ -120,7 +117,10 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
             step = AgenticPlanStep(step_number=step_idx, thought=output_text)
 
             # Check if output contains function call JSON
-            if "encode_and_search_vector_store" in output_text or "inspect_visual_candidate" in output_text:
+            if (
+                "encode_and_search_vector_store" in output_text
+                or "inspect_visual_candidate" in output_text
+            ):
                 call_args = {"query_text": query, "top_k": 10, "camera_id": camera_id_filter}
                 res = tools.execute_tool("qwen_call_1", "encode_and_search_vector_store", call_args)
                 step.tool_calls.append(
@@ -149,7 +149,7 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
 
         step1 = AgenticPlanStep(
             step_number=1,
-            thought="Step 1: On-device Qwen3-VL vector perception search via ChromaDB.",
+            thought="Step 1: On-device Qwen3-VL vector perception search via PostgreSQL pgvector.",
         )
         call1_args = {"query_text": query, "top_k": 10, "camera_id": camera_id_filter}
         res1 = tools.execute_tool("qwen_search_1", "encode_and_search_vector_store", call1_args)

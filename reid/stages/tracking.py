@@ -99,6 +99,33 @@ class TrackingStage(PipelineStage):
                 if master_id is not None and master_id != track.track_id:
                     pipeline.registry.merge_tracks(master_id, track.track_id)
 
+                    # Live log intra-camera trajectory fusion event
+                    sim = terminated.extra.get("fusion_similarity", 0.0)
+                    t_str = time.strftime("%H:%M:%S")
+                    fusion_msg = (
+                        f"[{t_str}] [bold green][INTRA-CAM FUSION][/bold green] "
+                        f"Merged Track [bold yellow]#{track.track_id:03d}[/bold yellow] into "
+                        f"Master Track [bold yellow]#{master_id:03d}[/bold yellow] ({terminated.class_label}) "
+                        f"| Sim: [cyan]{sim:.3f}[/cyan] | Feed: [magenta]{terminated.feed_name}[/magenta]"
+                    )
+
+                    listener = getattr(pipeline, "listener", None)
+                    if listener is not None:
+                        if hasattr(listener, "recent_logs"):
+                            listener.recent_logs.append(fusion_msg)
+                        if hasattr(listener, "on_frame_processed"):
+                            listener.on_frame_processed(
+                                video_name=terminated.feed_name,
+                                video_idx=getattr(listener, "current_video_idx", 1),
+                                total_videos=len(getattr(listener, "video_paths", [terminated.feed_name])),
+                                frame_count=getattr(track, "end_frame", 0),
+                                total_frames=0,
+                                elapsed_time=0.0,
+                                fps=0.0,
+                                registry=pipeline.registry,
+                                log_message=fusion_msg,
+                            )
+
                 compressed_track = getattr(terminated, "compressed_track", None)
                 if compressed_track is not None:
                     from tracking.serialization import JsonSerializer

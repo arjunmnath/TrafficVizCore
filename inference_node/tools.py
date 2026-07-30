@@ -34,7 +34,7 @@ class InferenceToolRegistry:
         return [
             {
                 "name": "encode_and_search_vector_store",
-                "description": "Performs text/image embedding similarity search against the ChromaDB track event database.",
+                "description": "Performs text/image embedding similarity search against the PostgreSQL pgvector track event database.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -56,7 +56,7 @@ class InferenceToolRegistry:
             },
             {
                 "name": "query_metadata",
-                "description": "Queries track event metadata (camera ID, time window, vehicle/person attributes, track ID).",
+                "description": "Queries track event metadata (camera ID, time window, vehicle/person attributes, track ID) from PostgreSQL.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -202,10 +202,8 @@ class InferenceToolRegistry:
             where = {"$and": where_clauses}
 
         top_k = int(args.get("top_k", 20))
-        collection = self.vector_store.collection
-        raw = collection.get(where=where, limit=top_k, include=["metadatas"])
+        metas = self.vector_store.query_metadata(where=where, limit=top_k)
 
-        metas = raw.get("metadatas", [])
         return ToolResult(
             call_id=call_id,
             name="query_metadata",

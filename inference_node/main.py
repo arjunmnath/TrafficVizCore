@@ -18,12 +18,15 @@ def run_inference_node(config: InferenceConfig) -> None:
     logger.info("Starting Agentic Planning VLM Inference Node")
     logger.info(f"Retrieval model: {config.retrieval_model}")
     logger.info(f"Reasoning model: {config.reasoning_model}")
-    logger.info(f"ChromaDB: {config.chroma_host}:{config.chroma_port}")
+    logger.info(f"PostgreSQL pgvector Table: {config.postgres_table}")
     logger.info(f"Video sources: {config.video_sources}")
 
-    logger.info("Connecting to ChromaDB...")
+    logger.info("Connecting to PostgreSQL VectorStore...")
     vector_store = VectorStore(
-        collection_name=config.chroma_collection,
+        table_name=config.postgres_table,
+        postgres_url=config.postgres_url,
+        supabase_url=config.supabase_url,
+        supabase_key=config.supabase_key,
     )
 
     logger.info(f"Loading retrieval encoder '{config.retrieval_model}'...")
@@ -63,9 +66,10 @@ def run_inference_node(config: InferenceConfig) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CCTV Agentic Planning VLM Inference Node")
-    parser.add_argument("--chroma_host", type=str, default="chromadb")
-    parser.add_argument("--chroma_port", type=int, default=8000)
-    parser.add_argument("--chroma_collection", type=str, default="track_events")
+    parser.add_argument("--postgres_table", type=str, default="track_events")
+    parser.add_argument("--postgres_url", type=str, default=None)
+    parser.add_argument("--supabase_url", type=str, default=None)
+    parser.add_argument("--supabase_key", type=str, default=None)
     parser.add_argument(
         "--retrieval_model",
         type=str,
@@ -95,9 +99,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config = InferenceConfig(
-        chroma_host=args.chroma_host,
-        chroma_port=args.chroma_port,
-        chroma_collection=args.chroma_collection,
+        postgres_table=args.postgres_table,
+        postgres_url=args.postgres_url,
+        supabase_url=args.supabase_url,
+        supabase_key=args.supabase_key,
         retrieval_model=args.retrieval_model,
         reasoning_model=args.reasoning_model,
         video_sources=json.loads(args.video_sources),

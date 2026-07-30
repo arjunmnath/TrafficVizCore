@@ -105,7 +105,7 @@ def load_tracks(
         json_path: Path to the registry JSON export.
         npz_path: Path to the NPZ embeddings file.
         aggregation: Embedding aggregation mode ('mean', 'max_pooling', 'last').
-        embedding_type: Which embeddings to use for matching ('occ' or 'smooth').
+        embedding_type: Primary embedding key prefix preference ('app', 'occ', or 'smooth').
         class_filter: If non-empty, only keep tracks whose class_label is in this list.
 
     Returns:
@@ -130,16 +130,38 @@ def load_tracks(
             if class_filter and class_label not in class_filter:
                 continue
 
-            # NPZ key format: {feed_name}_{embedding_type}_{track_id}
-            npz_key = f"{feed_name}_{embedding_type}_{track_id}"
-            if npz_key not in npz:
+            # Candidate NPZ key formats to support run_reid_pipeline.py output
+            candidate_keys = [
+                f"{feed_name}_{embedding_type}_{track_id}",
+                f"{feed_name}_app_{track_id}",
+                f"{feed_name}_occ_{track_id}",
+                f"{feed_name}_smooth_{track_id}",
+                f"{feed_name}_{track_id}",
+                f"app_{track_id}",
+                str(track_id),
+            ]
+
+            npz_key = None
+            for key in candidate_keys:
+                if key in npz:
+                    npz_key = key
+                    break
+
+            if npz_key is None:
                 print(
-                    f"  [warn] Missing embedding key '{npz_key}' in NPZ — skipping.",
+                    f"  [warn] Missing embedding key for track {track_id} (feed '{feed_name}') in NPZ — skipping.",
                     file=sys.stderr,
                 )
                 continue
 
             embeddings = npz[npz_key].astype(np.float32)  # (N, D)
+            if embeddings.size == 0:
+                print(
+                    f"  [warn] Empty embeddings array for key '{npz_key}' — skipping.",
+                    file=sys.stderr,
+                )
+                continue
+
             if embeddings.ndim == 1:
                 embeddings = embeddings[np.newaxis, :]
 
@@ -301,10 +323,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--embedding-type",
-        choices=["occ", "smooth"],
-        default="smooth",
+        choices=["app", "occ", "smooth"],
+        default="app",
         help=(
             "Which embeddings to use for matching: "
+            "'app' = appearance embeddings (produced by run_reid_pipeline.py); "
             "'occ' = raw per-frame detection features; "
             "'smooth' = tracker moving-average features"
         ),

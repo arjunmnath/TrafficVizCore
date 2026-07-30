@@ -6,7 +6,7 @@ from tracking.domain.metadata import TrackMetadata
 from tracking.domain.interfaces import SegmentationStrategy, TrajectoryFitter, SizeModel
 from tracking.domain.trajectory import PiecewiseTrajectory
 from tracking.domain.size_models import LinearModel, ConstantModel, SplineModel
-from tracking.domain.track import TimeModel, CompressedTrack, Statistics
+from tracking.domain.track import TimeModel, CompressedTrack, Statistics, ConfidenceModel
 from tracking.compression.segmentation import AdaptiveSegmentation
 from tracking.compression.fitting import ConstantFitter, LinearFitter, SplineFitter
 
@@ -19,6 +19,7 @@ class CompressedTrackBuilder:
         self._frames: List[int] = []
         self._timestamps: List[float] = []
         self._bboxes: List[Tuple[float, float, float, float]] = []  # xyxy format
+        self._confidences: List[float] = []
 
         # Strategies
         self._segmentation_strategy: SegmentationStrategy = AdaptiveSegmentation()
@@ -37,11 +38,16 @@ class CompressedTrackBuilder:
         return self
 
     def add_observation(
-        self, frame: int, timestamp: float, bbox: Tuple[float, float, float, float]
+        self,
+        frame: int,
+        timestamp: float,
+        bbox: Tuple[float, float, float, float],
+        confidence: float = 1.0,
     ) -> "CompressedTrackBuilder":
         self._frames.append(frame)
         self._timestamps.append(timestamp)
         self._bboxes.append(bbox)
+        self._confidences.append(confidence)
         return self
 
     def add_observations(
@@ -49,10 +55,15 @@ class CompressedTrackBuilder:
         frames: List[int],
         timestamps: List[float],
         bboxes: List[Tuple[float, float, float, float]],
+        confidences: Optional[List[float]] = None,
     ) -> "CompressedTrackBuilder":
         self._frames.extend(frames)
         self._timestamps.extend(timestamps)
         self._bboxes.extend(bboxes)
+        if confidences is not None:
+            self._confidences.extend(confidences)
+        else:
+            self._confidences.extend([1.0] * len(frames))
         return self
 
     def set_segmentation_strategy(self, strategy: SegmentationStrategy) -> "CompressedTrackBuilder":
@@ -92,11 +103,22 @@ class CompressedTrackBuilder:
         if not self._frames:
             raise ValueError("Cannot build CompressedTrack without observations.")
 
+        if len(self._confidences) != len(self._frames):
+            # Fallback fill defaults if length mismatch
+            if len(self._confidences) < len(self._frames):
+                self._confidences.extend([1.0] * (len(self._frames) - len(self._confidences)))
+            else:
+                self._confidences = self._confidences[: len(self._frames)]
+
         # Ensure observation lists are sorted by timestamp
-        zipped = sorted(zip(self._frames, self._timestamps, self._bboxes), key=lambda x: x[1])
+        zipped = sorted(
+            zip(self._frames, self._timestamps, self._bboxes, self._confidences),
+            key=lambda x: x[1],
+        )
         frames = [z[0] for z in zipped]
         timestamps = [z[1] for z in zipped]
         bboxes = [z[2] for z in zipped]
+        confidences = [z[3] for z in zipped]
 
         n = len(timestamps)
 
@@ -126,8 +148,9 @@ class CompressedTrackBuilder:
             end_timestamp=timestamps[-1],
         )
 
-        # 3. Build TimeModel
+        # 3. Build TimeModel and ConfidenceModel
         time_model = TimeModel(frames, timestamps)
+        confidence_model = ConfidenceModel(timestamps=timestamps, confidences=confidences, frames=frames)
 
         # 4. Estimate raw velocities and headings for segmentation
         velocities, headings = self._estimate_velocities_and_headings(timestamps, positions)
@@ -279,6 +302,7 @@ class CompressedTrackBuilder:
             size_model=size_model,
             trajectory=trajectory,
             statistics=statistics,
+            confidence_model=confidence_model,
         )
 
         return track

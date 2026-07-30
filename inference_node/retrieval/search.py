@@ -1,4 +1,4 @@
-"""Metadata filtering and semantic similarity search."""
+"""Metadata filtering and semantic similarity search with PostgreSQL pgvector."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ class RetrievalResult:
 
 
 class RetrievalEngine:
-    """Orchestrates query parsing, metadata filtering, and semantic vector search."""
+    """Orchestrates query parsing, metadata filtering, and semantic vector search over PostgreSQL pgvector."""
 
     def __init__(
         self,
@@ -53,7 +53,7 @@ class RetrievalEngine:
 
         where = None
         if self.metadata_filter_enabled and parsed.metadata_filters:
-            where = self._build_chroma_where(parsed.metadata_filters)
+            where = self._build_postgres_where(parsed.metadata_filters)
             self.logger.info(f"Metadata filters: {parsed.metadata_filters}")
 
         self.logger.info(f"Retrieval: semantic='{parsed.semantic_text}' top_k={top_k}")
@@ -68,8 +68,8 @@ class RetrievalEngine:
         return parsed, results
 
     @staticmethod
-    def _build_chroma_where(filters: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert parsed filters into a ChromaDB where clause."""
+    def _build_postgres_where(filters: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert parsed filters into a PostgreSQL query filter structure."""
         clauses: List[Dict[str, Any]] = []
 
         if "camera_id" in filters:

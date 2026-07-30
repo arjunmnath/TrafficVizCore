@@ -27,9 +27,11 @@ console = Console()
 
 
 class RichUIListener(ReIDPipelineListener):
-    def __init__(self, video_paths):
+    def __init__(self, video_paths, feed_names=None):
         self.video_paths = video_paths
-        self.video_names = [os.path.basename(vp) for vp in video_paths]
+        self.video_names = (
+            feed_names if feed_names is not None else [os.path.basename(vp) for vp in video_paths]
+        )
         self.recent_logs = []
         self.live = None
         self.status = None
@@ -516,9 +518,11 @@ class RichUIListener(ReIDPipelineListener):
 
 
 class HeadlessUIListener(ReIDPipelineListener):
-    def __init__(self, video_paths):
+    def __init__(self, video_paths, feed_names=None):
         self.video_paths = video_paths
-        self.video_names = [os.path.basename(vp) for vp in video_paths]
+        self.video_names = (
+            feed_names if feed_names is not None else [os.path.basename(vp) for vp in video_paths]
+        )
         self.current_video_idx = 1
 
     def show_configuration(self, config_data: dict):

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from typing import TYPE_CHECKING, List, Tuple
 
 import torch
 
-from inference_node.tools import InferenceToolRegistry
+if TYPE_CHECKING:
+    from inference_node.tools import InferenceToolRegistry
+
 from inference_node.vqa.types import AgenticPlanStep, RankedResult
 
 

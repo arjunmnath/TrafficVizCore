@@ -20,7 +20,7 @@ from tracking.domain.size_models import (
     SplineModel,
 )
 from tracking.domain.trajectory import PiecewiseTrajectory
-from tracking.domain.track import TimeModel, Statistics, CompressedTrack
+from tracking.domain.track import TimeModel, Statistics, CompressedTrack, ConfidenceModel
 
 __all__ = [
     "Interpolator",
@@ -42,4 +42,5 @@ __all__ = [
     "TimeModel",
     "Statistics",
     "CompressedTrack",
+    "ConfidenceModel",
 ]

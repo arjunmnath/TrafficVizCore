@@ -1,222 +1,263 @@
 #!/usr/bin/env python3
-"""
-crop_tracks.py — Generate high-quality crops of tracked objects from video using a differential heuristic.
+from __future__ import annotations
 
-Usage:
-------
-    python scripts/crop_tracks.py \
-        --registry temp.json \
-        --video-dir input_vids \
-        --output-dir output_crops \
-        --lambda 1.0
+"""
+Crop Tracks Script
+
+Produces image crops for each track specified in a compressed track registry JSON file.
+Reconstructs bounding boxes using trajectory segments along with width and height size models.
+Crops for each track are saved in output directories named `feedname_trackid`.
 """
 
 import argparse
 import json
 import os
 import sys
+from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import cv2
-import numpy as np
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 
-# Ensure repo root is in python path
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+# Add project root directory to python path
+workspace_root = Path(__file__).resolve().parent.parent
+if str(workspace_root) not in sys.path:
+    sys.path.insert(0, str(workspace_root))
 
 from tracking.serialization.json_deserializer import JsonDeserializer
-from tracking.domain.track import get_cleared_detection_frame, CompressedTrack
+from tracking.compression.reconstruction import BBoxReconstructor
+from tracking.domain.track import CompressedTrack
+
+console = Console()
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Crop the highest quality detection frame for each track from video using a differential heuristic."
-    )
-    parser.add_argument(
-        "--registry",
-        type=str,
-        default="temp.json",
-        help="Path to the JSON registry file containing tracks.",
-    )
-    parser.add_argument(
-        "--video-dir",
-        type=str,
-        default="input_vids",
-        help="Directory containing the source videos.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="output_crops",
-        help="Directory to save the cropped track images.",
-    )
-    parser.add_argument(
-        "--lambda",
-        type=float,
-        default=1.0,
-        dest="lambda_param",
-        help="Sensitivity parameter for weighting the differential size penalty.",
-    )
-    return parser.parse_args()
+def find_video_file(video_dir: Path, feed_name: str) -> Path | None:
+    """Find video file matching feed_name within video_dir."""
+    candidates = [
+        video_dir / feed_name,
+        video_dir / Path(feed_name).name,
+        video_dir / f"{Path(feed_name).stem}.mp4",
+        video_dir / f"{Path(feed_name).stem}.avi",
+        video_dir / f"{Path(feed_name).stem}.mkv",
+    ]
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
 
 
-def load_tracks_from_registry(registry_path: str) -> Dict[str, List[CompressedTrack]]:
-    """Loads all tracks from the registry, grouping them by video key."""
-    if not os.path.exists(registry_path):
-        raise FileNotFoundError(f"Registry file not found: {registry_path}")
+def produce_crops(
+    registry_path: Path,
+    video_dir: Path,
+    output_dir: Path,
+    time_gap: float = 0.0,
+) -> None:
+    """Read registry JSON and crop all tracks using compressed models and video sources."""
+    if not registry_path.exists():
+        console.print(f"[bold red]Error:[/bold red] Registry file not found: {registry_path}")
+        sys.exit(1)
 
+    console.print(f"[bold cyan]Loading registry JSON from:[/bold cyan] {registry_path}")
     with open(registry_path, "r") as f:
         registry = json.load(f)
 
-    video_to_tracks = {}
-    for video_key, track_list in registry.items():
-        tracks = []
-        for entry in track_list:
-            compressed = entry.get("compressed_track", entry)
-            if compressed is None:
-                continue
-            try:
-                track = JsonDeserializer.deserialize_from_dict(compressed)
-                tracks.append(track)
-            except Exception as exc:
-                track_id = compressed.get("track_id", "?")
-                print(f"[WARN] Skipping track {track_id} in {video_key}: {exc}", file=sys.stderr)
-        if tracks:
-            video_to_tracks[video_key] = tracks
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    return video_to_tracks
+    # 1. Deserialize tracks grouped by video feed name
+    tracks_by_feed: Dict[str, List[CompressedTrack]] = defaultdict(list)
+    track_count = 0
 
-
-def process_video_crops(
-    video_key: str,
-    video_path: str,
-    tracks: List[CompressedTrack],
-    output_dir: str,
-    lambda_param: float,
-) -> None:
-    """Finds optimal frames for all tracks of a video, seeks to them, and saves the crops."""
-    if not os.path.exists(video_path):
-        print(f"[ERROR] Video file not found: {video_path}", file=sys.stderr)
-        return
-
-    # Find optimal frames/boxes for all tracks in this video
-    # Group tracks by the target frame number to scan sequentially or perform minimal seeks
-    frame_to_tracks = {}
-    for track in tracks:
-        try:
-            best_frame, best_time, best_bbox, best_score = get_cleared_detection_frame(
-                track, lambda_param=lambda_param
-            )
-            frame_to_tracks.setdefault(best_frame, []).append(
-                (track.metadata.track_id, best_bbox, best_score)
-            )
-        except Exception as exc:
-            print(
-                f"[ERROR] Could not evaluate cleared frame for track {track.metadata.track_id}: {exc}",
-                file=sys.stderr,
-            )
-
-    if not frame_to_tracks:
-        print(f"No valid frames to crop for video '{video_key}'")
-        return
-
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        print(f"[ERROR] Failed to open video: {video_path}", file=sys.stderr)
-        return
-
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-    print(f"Processing '{video_key}' ({width}x{height}, {total_frames} frames)...")
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Sort target frames to seek/read forward efficiently
-    target_frames = sorted(frame_to_tracks.keys())
-    success_count = 0
-
-    for target_frame in target_frames:
-        if target_frame < 0 or target_frame >= total_frames:
-            print(
-                f"[WARN] Requested frame {target_frame} is out of video bounds [0, {total_frames})",
-                file=sys.stderr,
-            )
-            continue
-
-        cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
-        ret, frame = cap.read()
-        if not ret or frame is None:
-            print(f"[WARN] Failed to read frame {target_frame} from {video_key}", file=sys.stderr)
-            continue
-
-        for track_id, bbox, score in frame_to_tracks[target_frame]:
-            x1, y1, x2, y2 = bbox
-
-            # Clip bounding box to frame dimensions
-            ix1 = max(0, min(width - 1, int(round(x1))))
-            iy1 = max(0, min(height - 1, int(round(y1))))
-            ix2 = max(0, min(width, int(round(x2))))
-            iy2 = max(0, min(height, int(round(y2))))
-
-            if ix2 <= ix1 or iy2 <= iy1:
-                print(
-                    f"[WARN] Crop bbox for track {track_id} is empty/out of frame boundaries",
-                    file=sys.stderr,
-                )
-                continue
-
-            crop = frame[iy1:iy2, ix1:ix2]
-
-            # Format output file name: {video_base}_track_{track_id}.jpg
-            video_base = Path(video_key).stem
-            out_filename = f"{video_base}_track_{track_id}.jpg"
-            out_path = os.path.join(output_dir, out_filename)
-
-            cv2.imwrite(out_path, crop)
-            success_count += 1
-
-    cap.release()
-    print(f"Finished '{video_key}': successfully saved {success_count} crops.")
-
-
-def main():
-    args = parse_args()
-
-    try:
-        video_to_tracks = load_tracks_from_registry(args.registry)
-    except Exception as exc:
-        print(f"[ERROR] Failed to load registry: {exc}", file=sys.stderr)
+    if not isinstance(registry, dict):
+        console.print("[bold red]Error:[/bold red] Expected JSON object with feed names as keys.")
         sys.exit(1)
 
-    if not video_to_tracks:
-        print("No tracks found in registry.")
-        sys.exit(0)
+    for feed_name, track_list in registry.items():
+        for item in track_list:
+            if not item:
+                continue
+            comp_track_dict = item.get("compressed_track", item) if isinstance(item, dict) else item
+            if not comp_track_dict:
+                continue
 
-    for video_key, tracks in video_to_tracks.items():
-        # Resolve video path
-        video_path = os.path.join(args.video_dir, video_key)
+            try:
+                track = JsonDeserializer.deserialize_from_dict(comp_track_dict)
+            except Exception as e:
+                console.print(f"[yellow]Warning:[/yellow] Could not deserialize track in {feed_name}: {e}")
+                continue
 
-        # If not found directly, try matching by searching files in video-dir
-        if not os.path.exists(video_path):
-            # Try checking the current directory
-            if os.path.exists(video_key):
-                video_path = video_key
+            camera_feed = track.metadata.camera_id or feed_name
+            tracks_by_feed[camera_feed].append(track)
+            track_count += 1
+
+    console.print(
+        f"[bold green]Parsed {track_count} tracks across {len(tracks_by_feed)} video feeds.[/bold green]"
+    )
+
+    crops_saved = 0
+
+    # 2. Process each video feed
+    for feed_name, tracks in tracks_by_feed.items():
+        video_path = find_video_file(video_dir, feed_name)
+        if not video_path:
+            console.print(f"[bold red]Warning:[/bold red] Video source for feed '{feed_name}' not found in '{video_dir}'. Skipping.")
+            continue
+
+        cap = cv2.VideoCapture(str(video_path))
+        if not cap.isOpened():
+            console.print(f"[bold red]Error:[/bold red] Could not open video file: {video_path}")
+            continue
+
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_feed_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if fps <= 0:
+            fps = 25.0  # Default fallback if FPS read fails
+
+        # Build frame map for this video feed using correct video frame indices (v_frame = int(round(t * fps)))
+        # Map: v_frame -> List[crop_spec]
+        frame_crops_map: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+        total_feed_crops = 0
+
+        feed_stem = Path(feed_name).stem
+
+        for track in tracks:
+            track_id = track.metadata.track_id
+            # Output directory named feedname_trackid (e.g., clip1.mp4_1 or clip1_1)
+            # Create subfolder named feedname_trackid
+            track_dir_name = f"{feed_name}_{track_id}"
+            track_output_dir = output_dir / track_dir_name
+
+            timestamps = track.time_model.timestamps
+
+            # Sample timestamps based on time_gap
+            if time_gap <= 0.0:
+                sampled_timestamps = timestamps
             else:
-                # Try search under workspace root / input_vids
-                workspace_path = os.path.join(str(_REPO_ROOT), args.video_dir, video_key)
-                if os.path.exists(workspace_path):
-                    video_path = workspace_path
+                sampled_timestamps = []
+                last_t = -float("inf")
+                for t in timestamps:
+                    if t - last_t >= time_gap - 1e-6:
+                        sampled_timestamps.append(t)
+                        last_t = t
 
-        process_video_crops(
-            video_key=video_key,
-            video_path=video_path,
-            tracks=tracks,
-            output_dir=args.output_dir,
-            lambda_param=args.lambda_param,
-        )
+            for t in sampled_timestamps:
+                v_frame = int(round(t * fps))
+
+                try:
+                    x1, y1, x2, y2 = BBoxReconstructor.reconstruct(track, t)
+                except Exception as e:
+                    console.print(f"[yellow]Warning:[/yellow] Could not reconstruct bbox for track {track_id} at t={t}: {e}")
+                    continue
+
+                crop_name = f"frame_{v_frame:06d}_t{t:.2f}.jpg"
+                frame_crops_map[v_frame].append({
+                    "track_output_dir": track_output_dir,
+                    "crop_filename": crop_name,
+                    "bbox": (x1, y1, x2, y2),
+                    "timestamp": t,
+                    "track_id": track_id,
+                })
+                total_feed_crops += 1
+
+        target_frames = set(frame_crops_map.keys())
+        max_target_frame = max(target_frames) if target_frames else 0
+
+        console.print(f"[bold cyan]Extracting crops for video feed:[/bold cyan] {feed_name} ([yellow]{video_path.name}[/yellow]) @ {fps:.2f} FPS")
+
+        with Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task(f"Extracting {feed_name}", total=min(total_feed_frames, max_target_frame + 1) if total_feed_frames > 0 else max_target_frame + 1)
+
+            curr_frame_idx = 0
+            while cap.isOpened() and curr_frame_idx <= max_target_frame:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                if curr_frame_idx in frame_crops_map:
+                    img_h, img_w = frame.shape[:2]
+
+                    for crop_spec in frame_crops_map[curr_frame_idx]:
+                        x1, y1, x2, y2 = crop_spec["bbox"]
+
+                        # Clamp bounding box coordinates to image dimensions
+                        ix1 = max(0, min(img_w - 1, int(round(x1))))
+                        iy1 = max(0, min(img_h - 1, int(round(y1))))
+                        ix2 = max(0, min(img_w, int(round(x2))))
+                        iy2 = max(0, min(img_h, int(round(y2))))
+
+                        if ix2 > ix1 and iy2 > iy1:
+                            crop_img = frame[iy1:iy2, ix1:ix2]
+                            out_dir: Path = crop_spec["track_output_dir"]
+                            out_dir.mkdir(parents=True, exist_ok=True)
+                            out_path = out_dir / crop_spec["crop_filename"]
+
+                            cv2.imwrite(str(out_path), crop_img)
+                            crops_saved += 1
+
+                progress.update(task, completed=curr_frame_idx + 1)
+                curr_frame_idx += 1
+
+        cap.release()
+
+    console.print(
+        f"\n[bold green]Successfully produced {crops_saved} track crops in directory:[/bold green] {output_dir.resolve()}"
+    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Extract track crops from compressed track registry JSON."
+    )
+    parser.add_argument(
+        "--registry",
+        "-r",
+        type=Path,
+        default=workspace_root / "temp.noinclude.json",
+        help="Path to registry JSON file (default: temp.noinclude.json)",
+    )
+    parser.add_argument(
+        "--video-dir",
+        "-v",
+        type=Path,
+        default=workspace_root / "input_vids",
+        help="Directory containing video feed files (default: input_vids)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        "-o",
+        type=Path,
+        default=workspace_root / "crops.noinclude",
+        help="Output directory for crops (default: crops.noinclude)",
+    )
+    parser.add_argument(
+        "--time-gap",
+        type=float,
+        default=0.0,
+        help="Optional minimum time gap in seconds between sampled crops per track (default: 0 = all frames)",
+    )
+
+    args = parser.parse_args()
+    produce_crops(
+        registry_path=args.registry,
+        video_dir=args.video_dir,
+        output_dir=args.output_dir,
+        time_gap=args.time_gap,
+    )
 
 
 if __name__ == "__main__":

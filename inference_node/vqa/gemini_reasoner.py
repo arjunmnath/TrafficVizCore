@@ -6,9 +6,10 @@ import base64
 import json
 import os
 import urllib.request
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-from inference_node.tools import InferenceToolRegistry
+if TYPE_CHECKING:
+    from inference_node.tools import InferenceToolRegistry
 from inference_node.vqa.base import BaseAgenticVLMReasoner
 from inference_node.vqa.types import AgenticPlanStep, RankedResult, ToolCallSpec, ToolResult
 from shared.utils import setup_logger
@@ -159,7 +160,7 @@ class GeminiAgenticReasoner(BaseAgenticVLMReasoner):
         # Step 1: Encoded Vector Search
         step1 = AgenticPlanStep(
             step_number=1,
-            thought="Step 1: Execute embedding vector search using text/image encoder over ChromaDB.",
+            thought="Step 1: Execute embedding vector search using text/image encoder over PostgreSQL pgvector.",
         )
         call1_args = {"query_text": query, "top_k": 10, "camera_id": camera_id_filter}
         res1 = tools.execute_tool("call_search_1", "encode_and_search_vector_store", call1_args)

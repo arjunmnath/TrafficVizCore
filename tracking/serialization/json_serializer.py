@@ -68,7 +68,10 @@ class JsonSerializer:
         # 4. Serialize time model
         time_model_data = track.time_model.serialize()
 
-        # 5. Serialize statistics
+        # 5. Serialize confidence model
+        confidence_model_data = track.confidence_model.serialize()
+
+        # 6. Serialize statistics
         stats_data = track.statistics.serialize()
 
         return {
@@ -81,6 +84,7 @@ class JsonSerializer:
             "width_model": width_model_data,
             "height_model": height_model_data,
             "time_model": time_model_data,
+            "confidence_model": confidence_model_data,
             "statistics": stats_data,
         }
 

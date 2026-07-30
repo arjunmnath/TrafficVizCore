@@ -143,3 +143,4 @@ trained_models
 *.noinclude.*
 input_vids
 tests
+*.db

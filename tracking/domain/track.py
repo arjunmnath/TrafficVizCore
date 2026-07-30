@@ -7,6 +7,52 @@ from tracking.domain.interfaces import SizeModel
 from tracking.domain.trajectory import PiecewiseTrajectory
 
 
+class ConfidenceModel:
+    """Handles mapping between timestamps/frames and detector confidence scores."""
+
+    def __init__(
+        self,
+        timestamps: List[float],
+        confidences: List[float],
+        frames: Optional[List[int]] = None,
+    ):
+        if len(timestamps) != len(confidences):
+            raise ValueError("Timestamps and confidences lists must have the same length.")
+        if not timestamps:
+            raise ValueError("ConfidenceModel must have at least one timestamp/confidence entry.")
+
+        if frames is not None and len(frames) == len(timestamps):
+            sorted_tuples = sorted(zip(timestamps, confidences, frames), key=lambda x: x[0])
+            self.timestamps = [p[0] for p in sorted_tuples]
+            self.confidences = [float(p[1]) for p in sorted_tuples]
+            self.frames = [int(p[2]) for p in sorted_tuples]
+        else:
+            sorted_tuples = sorted(zip(timestamps, confidences), key=lambda x: x[0])
+            self.timestamps = [p[0] for p in sorted_tuples]
+            self.confidences = [float(p[1]) for p in sorted_tuples]
+            self.frames = []
+
+    def confidence(self, timestamp: float) -> float:
+        """Map timestamp to detector confidence score via linear interpolation, clipped to [0, 1]."""
+        if len(self.timestamps) == 1:
+            val = self.confidences[0]
+        else:
+            val = float(np.interp(timestamp, self.timestamps, self.confidences))
+        return float(np.clip(val, 0.0, 1.0))
+
+    def __call__(self, timestamp: float) -> float:
+        return self.confidence(timestamp)
+
+    def serialize(self) -> Dict[str, Any]:
+        res = {
+            "timestamps": [float(t) for t in self.timestamps],
+            "confidences": [float(c) for c in self.confidences],
+        }
+        if self.frames:
+            res["frames"] = [int(f) for f in self.frames]
+        return res
+
+
 class TimeModel:
     """Handles mapping between frame numbers and timestamps, supporting variable FPS."""
 
@@ -121,12 +167,21 @@ class CompressedTrack:
         size_model: SizeModel,
         trajectory: PiecewiseTrajectory,
         statistics: Optional[Statistics] = None,
+        confidence_model: Optional[ConfidenceModel] = None,
     ):
         self.metadata = metadata
         self.time_model = time_model
         self.size_model = size_model
         self.trajectory = trajectory
         self.statistics = statistics or Statistics.compute(trajectory)
+        if confidence_model is not None:
+            self.confidence_model = confidence_model
+        else:
+            self.confidence_model = ConfidenceModel(
+                timestamps=self.time_model.timestamps,
+                confidences=[1.0] * len(self.time_model.timestamps),
+                frames=self.time_model.frames,
+            )
 
     def position(self, t: float) -> Tuple[float, float]:
         """Continuous 2D position (cx, cy) at timestamp t."""
@@ -147,6 +202,10 @@ class CompressedTrack:
     def height(self, t: float) -> float:
         """Continuous height at timestamp t."""
         return self.size_model.height(t)
+
+    def confidence(self, t: float) -> float:
+        """Continuous detector confidence at timestamp t."""
+        return self.confidence_model.confidence(t)
 
     def acceleration(self, t: float) -> Tuple[float, float]:
         """Continuous 2D acceleration (ax, ay) at timestamp t (numerical derivative)."""
@@ -172,21 +231,35 @@ class CompressedTrack:
 def get_cleared_detection_frame(
     track: Any,
     lambda_param: float = 1.0,
+    mu_param: float = 0.5,
     dt: float = 1e-3,
+    w_conf: float = 1.0,
 ) -> Tuple[int, float, Tuple[float, float, float, float], float]:
     """Finds the optimal 'cleared' detection frame from a track.
 
-    Uses a differential heuristic on the height (h) and width (w) model of the track
-    to penalize rapid/unstable size changes, while maximizing the bounding box area.
+    Multi-heuristic scoring accounts for:
+    1. Detector Confidence (C): Higher confidence detections yield clearer crops.
+    2. Bounding Box Area (A = w * h): Resolution/size of detection crop.
+    3. Differential Relative Size Change Penalty: Penalizes rapid/unstable size jumps (|dw/dt|/w + |dh/dt|/h).
+    4. Aspect Ratio Stability Penalty: Penalizes sudden deviations from track's median aspect ratio (r = w/h).
 
     Score formula:
-        Score = Area / (1.0 + lambda_param * (|dw/dt| + |dh/dt|))
+        rel_dw = |dw/dt| / max(w, 1.0)
+        rel_dh = |dh/dt| / max(h, 1.0)
+        size_penalty = 1.0 + lambda_param * (rel_dw + rel_dh)
+
+        aspect_dev = |r - median_r| / max(median_r, 1e-6)
+        aspect_penalty = 1.0 + mu_param * aspect_dev
+
+        Score = (Area * (C ** w_conf)) / (size_penalty * aspect_penalty)
 
     Args:
         track: The track object. Supports CompressedTrack, TerminatedTrack,
                or any object that has a 'compressed_track' or 'history' attribute/dict.
-        lambda_param: Sensitivity parameter weighting the derivative penalty.
+        lambda_param: Sensitivity parameter weighting relative size derivative penalty.
+        mu_param: Sensitivity parameter weighting aspect ratio deviation penalty.
         dt: The time delta used for numerical differentiation (in seconds).
+        w_conf: Exponent weight for detector confidence term.
 
     Returns:
         Tuple of (best_frame_id, best_timestamp, best_bbox, best_score)
@@ -200,24 +273,36 @@ def get_cleared_detection_frame(
         timestamps = actual_track.time_model.timestamps
         frames = actual_track.time_model.frames
 
+        if not frames or not timestamps:
+            raise ValueError("CompressedTrack has no frames or timestamps.")
+
+        # Compute median aspect ratio across track
+        aspect_ratios = []
+        for t in timestamps:
+            w = actual_track.width(t)
+            h = actual_track.height(t)
+            aspect_ratios.append(w / max(h, 1e-6))
+        median_r = float(np.median(aspect_ratios)) if aspect_ratios else 1.0
+
         best_frame = None
         best_time = None
         best_bbox = None
         best_score = -1.0
 
+        t0 = actual_track.metadata.start_timestamp
+        t1 = actual_track.metadata.end_timestamp
+
         for frame, t in zip(frames, timestamps):
             w = actual_track.width(t)
             h = actual_track.height(t)
             area = w * h
-
-            # Compute numerical derivative using central difference
-            t0 = actual_track.metadata.start_timestamp
-            t1 = actual_track.metadata.end_timestamp
+            r = w / max(h, 1e-6)
+            conf = actual_track.confidence(t)
 
             t_plus = min(t1, t + dt)
             t_minus = max(t0, t - dt)
-
             denom = t_plus - t_minus
+
             if denom > 1e-6:
                 dw = (actual_track.width(t_plus) - actual_track.width(t_minus)) / denom
                 dh = (actual_track.height(t_plus) - actual_track.height(t_minus)) / denom
@@ -225,8 +310,14 @@ def get_cleared_detection_frame(
                 dw = 0.0
                 dh = 0.0
 
-            dA_dt = dw * h + w * dh
-            score = area / (1.0 + lambda_param * abs(dA_dt))
+            rel_dw = abs(dw) / max(w, 1.0)
+            rel_dh = abs(dh) / max(h, 1.0)
+            size_penalty = 1.0 + lambda_param * (rel_dw + rel_dh)
+
+            aspect_dev = abs(r - median_r) / max(median_r, 1e-6)
+            aspect_penalty = 1.0 + mu_param * aspect_dev
+
+            score = (area * (conf**w_conf)) / (size_penalty * aspect_penalty)
 
             if score > best_score:
                 best_score = score
@@ -244,10 +335,11 @@ def get_cleared_detection_frame(
 
         return best_frame, best_time, best_bbox, best_score
 
-    # Fallback to history sequence format (e.g. dict or object with frames, timestamps, bboxes)
+    # Fallback to history sequence format (e.g. dict or object with frames, timestamps, bboxes, confidences/scores)
     frames = None
     timestamps = None
     bboxes = None
+    confidences = None
 
     history = getattr(actual_track, "history", None)
     if history is None and isinstance(actual_track, dict):
@@ -257,6 +349,9 @@ def get_cleared_detection_frame(
         frames = history.get("frames", [])
         timestamps = history.get("timestamps", [])
         bboxes = history.get("bboxes", [])
+        confidences = (
+            history.get("confidences") or history.get("scores") or history.get("confidence")
+        )
     elif (
         hasattr(actual_track, "frames")
         and hasattr(actual_track, "timestamps")
@@ -265,6 +360,11 @@ def get_cleared_detection_frame(
         frames = getattr(actual_track, "frames")
         timestamps = getattr(actual_track, "timestamps")
         bboxes = getattr(actual_track, "bboxes")
+        confidences = (
+            getattr(actual_track, "confidences", None)
+            or getattr(actual_track, "scores", None)
+            or getattr(actual_track, "confidence", None)
+        )
 
     if (
         not frames
@@ -276,6 +376,16 @@ def get_cleared_detection_frame(
         raise ValueError("Track lacks standard frame, timestamp, or bounding box history.")
 
     n = len(timestamps)
+    if confidences is None or len(confidences) != n:
+        confidences = [1.0] * n
+
+    aspect_ratios = []
+    for bbox in bboxes:
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+        aspect_ratios.append(w / max(h, 1e-6))
+    median_r = float(np.median(aspect_ratios)) if aspect_ratios else 1.0
+
     best_frame = None
     best_time = None
     best_bbox = None
@@ -285,10 +395,12 @@ def get_cleared_detection_frame(
         frame = frames[i]
         t = timestamps[i]
         bbox = bboxes[i]
+        conf = float(confidences[i])
         x1, y1, x2, y2 = bbox
         w = x2 - x1
         h = y2 - y1
         area = w * h
+        r = w / max(h, 1e-6)
 
         if n < 2:
             dw = 0.0
@@ -327,8 +439,14 @@ def get_cleared_detection_frame(
                     dw = 0.0
                     dh = 0.0
 
-        dA_dt = dw * h + w * dh
-        score = area / (1.0 + lambda_param * abs(dA_dt))
+        rel_dw = abs(dw) / max(w, 1.0)
+        rel_dh = abs(dh) / max(h, 1.0)
+        size_penalty = 1.0 + lambda_param * (rel_dw + rel_dh)
+
+        aspect_dev = abs(r - median_r) / max(median_r, 1e-6)
+        aspect_penalty = 1.0 + mu_param * aspect_dev
+
+        score = (area * (conf**w_conf)) / (size_penalty * aspect_penalty)
 
         if score > best_score:
             best_score = score
@@ -340,3 +458,4 @@ def get_cleared_detection_frame(
         raise ValueError("No frames found in track history.")
 
     return best_frame, best_time, best_bbox, best_score
+
