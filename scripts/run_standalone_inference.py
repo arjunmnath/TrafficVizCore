@@ -61,9 +61,9 @@ def parse_args():
     parser.add_argument(
         "--npz_path",
         type=str,
-        default=str(workspace_root / "temp.noinclude.npz")
-        if (workspace_root / "temp.noinclude.npz").exists()
-        else None,
+        default=str(workspace_root / "registry.embeddings.npz")
+        if (workspace_root / "registry.embeddings.npz").exists()
+        else (str(workspace_root / "temp.noinclude.npz") if (workspace_root / "temp.noinclude.npz").exists() else None),
         help="Path to single .npz embeddings file.",
     )
     parser.add_argument(
@@ -75,9 +75,9 @@ def parse_args():
     parser.add_argument(
         "--json_path",
         type=str,
-        default=str(workspace_root / "temp.noinclude.json")
-        if (workspace_root / "temp.noinclude.json").exists()
-        else None,
+        default=str(workspace_root / "registry.tracks.json")
+        if (workspace_root / "registry.tracks.json").exists()
+        else (str(workspace_root / "temp.noinclude.json") if (workspace_root / "temp.noinclude.json").exists() else None),
         help="Path to registry JSON metadata file.",
     )
     parser.add_argument(
@@ -251,7 +251,7 @@ def run_agentic_inference(args, vector_store: VectorStore) -> List[Dict[str, Any
     )
 
     console.print(f"[bold green]Executing Agentic VLM query:[/bold green] '{args.query}'")
-    results = pipeline.query(query_text=args.query, top_k=args.top_k, camera_id=args.camera_id)
+    results, trajectory = pipeline.query_with_trajectory(query_text=args.query, top_k=args.top_k, camera_id=args.camera_id)
 
     formatted_results = []
     table = Table(title=f"Agentic VLM Pipeline Results for '{args.query}'", box=box.ROUNDED)
@@ -275,11 +275,29 @@ def run_agentic_inference(args, vector_store: VectorStore) -> List[Dict[str, Any
 
     console.print("\n")
     console.print(Panel(table, border_style="cyan", expand=False))
-    return formatted_results
+
+    # Print reasoning traces to console
+    if trajectory:
+        console.print("\n[bold yellow]Agentic Reasoning Traces & Execution Steps:[/bold yellow]")
+        for step in trajectory:
+            console.print(f"\n[bold underline]Step {step.step_number}[/bold underline]: {step.thought.strip()}")
+            for call in step.tool_calls:
+                console.print(f"  [cyan]🔧 Tool Call [{call.call_id}]:[/cyan] {call.name}({call.arguments})")
+            for res in step.tool_results:
+                status_str = "[red]ERROR[/red]" if res.is_error else "[green]SUCCESS[/green]"
+                console.print(f"  [magenta]📥 Tool Result [{res.call_id}]:[/magenta] Status={status_str} | Content={res.content}")
+
+    return formatted_results, trajectory
 
 
-def generate_markdown_report(args, vector_store: VectorStore, results: List[Dict[str, Any]], report_path: Path):
-    """Generate a clean Markdown summary report at the end of the standalone inference run."""
+def generate_markdown_report(
+    args,
+    vector_store: VectorStore,
+    results: List[Dict[str, Any]],
+    report_path: Path,
+    trajectory: Optional[List[Any]] = None,
+):
+    """Generate a clean Markdown summary report including full reasoning traces and tool call results."""
     import datetime
 
     timestamp_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -293,6 +311,46 @@ def generate_markdown_report(args, vector_store: VectorStore, results: List[Dict
     md_lines.append(f"**Total Events Indexed:** `{vector_store.get_event_count()}`  ")
     md_lines.append(f"**Retrieval Encoder:** `{args.retrieval_model}`  ")
     md_lines.append(f"**Reasoning Model:** `{args.reasoning_model}`  \n")
+
+    if trajectory:
+        md_lines.append("## Agentic VLM Reasoning Traces & Tool Execution\n")
+        for step in trajectory:
+            step_num = getattr(step, "step_number", 1)
+            thought = getattr(step, "thought", "")
+            tool_calls = getattr(step, "tool_calls", [])
+            tool_results = getattr(step, "tool_results", [])
+
+            md_lines.append(f"### Step {step_num}: Agent Thought\n")
+            md_lines.append(f"> {thought.strip()}\n")
+
+            if tool_calls:
+                md_lines.append("#### Tool Calls\n")
+                for call in tool_calls:
+                    cid = getattr(call, "call_id", "")
+                    name = getattr(call, "name", "")
+                    args_dict = getattr(call, "arguments", {})
+                    md_lines.append(f"- **`{name}`** (ID: `{cid}`)")
+                    md_lines.append("  ```json")
+                    md_lines.append(json.dumps(args_dict, indent=2))
+                    md_lines.append("  ```\n")
+
+            if tool_results:
+                md_lines.append("#### Tool Execution Results\n")
+                for res in tool_results:
+                    cid = getattr(res, "call_id", "")
+                    name = getattr(res, "name", "")
+                    content = getattr(res, "content", {})
+                    is_err = getattr(res, "is_error", False)
+                    img_attached = len(getattr(res, "extracted_images", [])) > 0
+
+                    status_tag = "FAILED" if is_err else "SUCCESS"
+                    md_lines.append(f"- **`{name}`** (ID: `{cid}`, Status: `{status_tag}`, Images Attached: `{img_attached}`)")
+                    md_lines.append("  ```json")
+                    try:
+                        md_lines.append(json.dumps(content, indent=2, default=str))
+                    except Exception:
+                        md_lines.append(str(content))
+                    md_lines.append("  ```\n")
 
     md_lines.append("## Search Results Summary\n")
     if not results:
@@ -400,10 +458,11 @@ def main():
         console.print("[bold red]Warning: Vector store contains 0 events. Ensure .npz and .json files exist or specify --npz_path / --npz_dir.[/bold red]")
 
     # Run chosen inference mode
+    trajectory = None
     if args.mode == "direct":
         results = run_direct_inference(args, vector_store)
     else:
-        results = run_agentic_inference(args, vector_store)
+        results, trajectory = run_agentic_inference(args, vector_store)
 
     # Export output JSON if requested
     if args.output_json:
@@ -416,6 +475,30 @@ def main():
             "total_store_events": vector_store.get_event_count(),
             "results_count": len(results),
             "results": results,
+            "trajectory": [
+                {
+                    "step_number": getattr(step, "step_number", 1),
+                    "thought": getattr(step, "thought", ""),
+                    "tool_calls": [
+                        {
+                            "call_id": getattr(c, "call_id", ""),
+                            "name": getattr(c, "name", ""),
+                            "arguments": getattr(c, "arguments", {}),
+                        }
+                        for c in getattr(step, "tool_calls", [])
+                    ],
+                    "tool_results": [
+                        {
+                            "call_id": getattr(r, "call_id", ""),
+                            "name": getattr(r, "name", ""),
+                            "content": getattr(r, "content", {}),
+                            "is_error": getattr(r, "is_error", False),
+                        }
+                        for r in getattr(step, "tool_results", [])
+                    ],
+                }
+                for step in (trajectory or [])
+            ],
         }
         with open(out_path, "w") as f:
             json.dump(summary_payload, f, indent=2)
@@ -423,7 +506,7 @@ def main():
 
     # Generate Markdown Summary Report
     if args.report_file:
-        generate_markdown_report(args, vector_store, results, Path(args.report_file))
+        generate_markdown_report(args, vector_store, results, Path(args.report_file), trajectory=trajectory)
 
 
 if __name__ == "__main__":

@@ -50,13 +50,13 @@ class AgenticPlannerPipeline:
         img_copy.save(buf, format="JPEG", quality=80)
         return base64.b64encode(buf.getvalue()).decode("utf-8")
 
-    def query(
+    def query_with_trajectory(
         self,
         query_text: str,
         top_k: Optional[int] = None,
         camera_id: Optional[str] = None,
-    ) -> List[QueryResultItem]:
-        """Execute the multistage agentic planning pipeline."""
+    ) -> Tuple[List[QueryResultItem], List[AgenticPlanStep]]:
+        """Execute the multistage agentic planning pipeline and return both final results and execution trajectory."""
         self.logger.info(f"Executing Agentic Planning VLM pipeline for query: '{query_text}'")
 
         trajectory, ranked_results = self.reasoner.plan_and_execute(
@@ -99,4 +99,14 @@ class AgenticPlannerPipeline:
                 )
             )
 
+        return results, trajectory
+
+    def query(
+        self,
+        query_text: str,
+        top_k: Optional[int] = None,
+        camera_id: Optional[str] = None,
+    ) -> List[QueryResultItem]:
+        """Execute the multistage agentic planning pipeline and return final results."""
+        results, _ = self.query_with_trajectory(query_text=query_text, top_k=top_k, camera_id=camera_id)
         return results
