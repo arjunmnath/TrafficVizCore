@@ -1,13 +1,8 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Dict, Optional
 
 
 class VLMRetrievalConfig(BaseModel):
-    postgres_table: str = "track_events"
-    postgres_url: Optional[str] = None
-    supabase_url: Optional[str] = None
-    supabase_key: Optional[str] = None
-
     npz_dir: Optional[str] = None
     npz_path: Optional[str] = None
     json_path: Optional[str] = None

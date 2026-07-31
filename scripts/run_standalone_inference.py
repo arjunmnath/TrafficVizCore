@@ -61,10 +61,8 @@ def parse_args():
     parser.add_argument(
         "--npz_path",
         type=str,
-        default=str(workspace_root / "registry.embeddings.npz")
-        if (workspace_root / "registry.embeddings.npz").exists()
-        else (str(workspace_root / "temp.noinclude.npz") if (workspace_root / "temp.noinclude.npz").exists() else None),
-        help="Path to single .npz embeddings file.",
+        required=True,
+        help="Path to .npz embeddings file.",
     )
     parser.add_argument(
         "--npz_dir",
@@ -75,16 +73,8 @@ def parse_args():
     parser.add_argument(
         "--json_path",
         type=str,
-        default=str(workspace_root / "registry.tracks.json")
-        if (workspace_root / "registry.tracks.json").exists()
-        else (str(workspace_root / "temp.noinclude.json") if (workspace_root / "temp.noinclude.json").exists() else None),
+        required=True,
         help="Path to registry JSON metadata file.",
-    )
-    parser.add_argument(
-        "--postgres_url",
-        type=str,
-        default=None,
-        help="Optional PostgreSQL database URL if testing database mode.",
     )
     parser.add_argument(
         "--retrieval_model",
@@ -469,11 +459,10 @@ def main():
             npz_dir=args.npz_dir,
             npz_path=args.npz_path,
             json_path=args.json_path,
-            postgres_url=args.postgres_url,
         )
     else:
         console.print("[bold cyan]Connecting to default Vector Store...[/bold cyan]")
-        vector_store = VectorStore(postgres_url=args.postgres_url)
+        vector_store = VectorStore()
 
     console.print(f"[bold green]Store Connection Type:[/bold green] '{vector_store.conn_type}'")
     console.print(f"[bold green]Total Events Indexed:[/bold green] {vector_store.get_event_count()}\n")

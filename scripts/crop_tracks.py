@@ -227,22 +227,22 @@ def main() -> None:
         "--registry",
         "-r",
         type=Path,
-        default=workspace_root / "temp.noinclude.json",
-        help="Path to registry JSON file (default: temp.noinclude.json)",
+        required=True,
+        help="Path to input compressed track registry JSON file",
     )
     parser.add_argument(
         "--video-dir",
         "-v",
         type=Path,
-        default=workspace_root / "input_vids",
-        help="Directory containing video feed files (default: input_vids)",
+        required=True,
+        help="Directory containing video feed files",
     )
     parser.add_argument(
         "--output-dir",
         "-o",
         type=Path,
-        default=workspace_root / "crops.noinclude",
-        help="Output directory for crops (default: crops.noinclude)",
+        required=True,
+        help="Output directory to save extracted crops",
     )
     parser.add_argument(
         "--time-gap",

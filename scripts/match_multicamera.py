@@ -345,7 +345,10 @@ def main() -> None:
         help="Only compare tracks with the same class label across cameras",
     )
     parser.add_argument(
-        "--output", metavar="PATH", default=None, help="Optional path to save match results as JSON"
+        "--output",
+        required=True,
+        metavar="PATH",
+        help="Path to save output match results JSON",
     )
 
     args = parser.parse_args()

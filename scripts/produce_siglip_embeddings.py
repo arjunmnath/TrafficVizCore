@@ -59,29 +59,25 @@ def parse_args():
     parser.add_argument(
         "--crop_dir",
         type=str,
-        default=str(workspace_root / "crops.noinclude")
-        if (workspace_root / "crops.noinclude").exists()
-        else (str(workspace_root / "reid_crops_cleaned") if (workspace_root / "reid_crops_cleaned").exists() else "crops"),
+        required=True,
         help="Path to crops directory (subdirectories per track or flat image folder).",
     )
     parser.add_argument(
         "--global_match_json",
         type=str,
-        default=str(workspace_root / "gobal_match.noinclude.json")
-        if (workspace_root / "gobal_match.noinclude.json").exists()
-        else None,
+        required=True,
         help="Path to cross-camera global match association JSON.",
     )
     parser.add_argument(
         "--output_npz",
         type=str,
-        default=str(workspace_root / "registry.embeddings.npz"),
+        required=True,
         help="Target output .npz embedding file path.",
     )
     parser.add_argument(
         "--output_json",
         type=str,
-        default=str(workspace_root / "registry.tracks.json"),
+        required=True,
         help="Target output .json registry metadata file path.",
     )
     parser.add_argument(

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Pipeline runner to perform cross-video person and vehicle re-identification tracking using YOLOv8 detectors and ResNet features.
-Maintains a simple global registry tracking occurrences of unique identities.
+Pipeline runner to perform video object tracking and intra-camera trajectory fusion using YOLOv8 detectors and feature extractors.
+Maintains per-camera track registries to export compressed trajectory models and appearance feature arrays.
 Supports both headless mode (for servers) and UI mode (for live monitoring).
 """
 
@@ -22,7 +22,6 @@ from reid import (
     SimpleRegistry,
     RichUIListener,
     HeadlessUIListener,
-    resolve_path,
 )
 from reid.postprocessing import (
     PostProcessingPipeline,
@@ -41,20 +40,21 @@ from reid.stages import (
 )
 
 
-def export_results(registries: dict, output_path: str) -> None:
-    """Export the registry results to JSON and embeddings to NPZ, outside pipeline scope.
+def export_results(registries: dict, output_json_path: str, output_npz_path: str) -> None:
+    """Export the registry results to JSON summary and embeddings to NPZ.
 
     Args:
         registries (dict): Mapping of feed name to SimpleRegistry.
-        output_path (str): Output path for JSON summary.
+        output_json_path (str): Output path for JSON summary.
+        output_npz_path (str): Output path for NPZ embeddings.
     """
-    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(output_json_path)), exist_ok=True)
 
     summary = {}
     for feed_name, reg in registries.items():
         summary[feed_name] = reg.get_results_summary()
 
-    with open(output_path, "w") as f:
+    with open(output_json_path, "w") as f:
         json.dump(summary, f, indent=4)
 
     embeddings = {}
@@ -63,8 +63,8 @@ def export_results(registries: dict, output_path: str) -> None:
             embeddings[f"{feed_name}_{global_id}"] = data
 
     if embeddings:
-        npz_path = os.path.splitext(output_path)[0] + ".npz"
-        np.savez(npz_path, **embeddings)
+        os.makedirs(os.path.dirname(os.path.abspath(output_npz_path)), exist_ok=True)
+        np.savez(output_npz_path, **embeddings)
 
 
 VALID_VIDEO_EXTENSIONS = {
@@ -80,38 +80,26 @@ VALID_VIDEO_EXTENSIONS = {
 }
 
 
-def collect_video_paths(raw_inputs: list) -> list:
-    """Collect all valid video file paths from specified files or directories."""
-    video_paths = []
-    seen = set()
+def collect_video_paths(directory_path: str) -> list:
+    """Collect all valid video file paths from a directory."""
+    abs_dir = os.path.abspath(directory_path)
 
-    for item in raw_inputs:
-        abs_item = os.path.abspath(item)
-        if not os.path.exists(abs_item):
-            print(f"Warning: Input path does not exist: {item}", file=sys.stderr)
-            continue
+    if not os.path.exists(abs_dir) or not os.path.isdir(abs_dir):
+        print(f"Error: Directory path does not exist or is not a directory: {directory_path}", file=sys.stderr)
+        return []
 
-        if os.path.isfile(abs_item):
-            if abs_item not in seen:
-                seen.add(abs_item)
-                video_paths.append(abs_item)
-        elif os.path.isdir(abs_item):
-            dir_videos = []
-            for root, _, files in os.walk(abs_item):
-                for f in files:
-                    if f.startswith("."):
-                        continue
-                    ext = os.path.splitext(f)[1].lower()
-                    if ext in VALID_VIDEO_EXTENSIONS:
-                        full_path = os.path.abspath(os.path.join(root, f))
-                        dir_videos.append(full_path)
-            dir_videos.sort()
-            for v in dir_videos:
-                if v not in seen:
-                    seen.add(v)
-                    video_paths.append(v)
+    dir_videos = []
+    for root, _, files in os.walk(abs_dir):
+        for f in files:
+            if f.startswith("."):
+                continue
+            ext = os.path.splitext(f)[1].lower()
+            if ext in VALID_VIDEO_EXTENSIONS:
+                full_path = os.path.abspath(os.path.join(root, f))
+                dir_videos.append(full_path)
 
-    return video_paths
+    dir_videos.sort()
+    return dir_videos
 
 
 def generate_feed_names(video_paths: list) -> list:
@@ -137,45 +125,35 @@ def generate_feed_names(video_paths: list) -> list:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Run cross-video ReID tracking pipeline on video files or directories."
-    )
-    parser.add_argument(
-        "inputs",
-        nargs="*",
-        default=[],
-        help="Path(s) to video file(s) or directory/directories containing video files.",
-    )
-    parser.add_argument(
-        "--videos",
-        "--video",
-        "--inputs",
-        nargs="+",
-        dest="video_flags",
-        default=[],
-        help="Path(s) to video files or directories containing videos.",
+        description="Run tracking and intra-camera trajectory fusion pipeline on video files in a directory."
     )
     parser.add_argument(
         "--dir",
         "--directory",
         type=str,
-        default=None,
-        help="Directory path containing video files or subdirectories.",
+        dest="dir",
+        required=True,
+        help="Directory path containing input video files.",
     )
     parser.add_argument(
-        "--video1", type=str, default=None, help="Path to first video file (legacy option)"
+        "--output",
+        type=str,
+        required=True,
+        help="Output path for JSON summary of track models",
     )
     parser.add_argument(
-        "--video2", type=str, default=None, help="Path to second video file (legacy option)"
+        "--output_npz",
+        "--output-npz",
+        type=str,
+        required=True,
+        dest="output_npz",
+        help="Output path for ReID feature embeddings NPZ file",
     )
     parser.add_argument(
         "--yolo_model",
         type=str,
         default="trained_model/yolo26x.pt",
         help="Path to YOLOv8 model file",
-    )
-    parser.add_argument("--threshold", type=float, default=0.5, help="ReID matching threshold")
-    parser.add_argument(
-        "--output", type=str, required=True, help="Output path for JSON summary of occurrences"
     )
     parser.add_argument(
         "--max_frames", type=int, default=0, help="Maximum frames to process per video (0 for all)"
@@ -192,27 +170,18 @@ def main():
     parser.add_argument(
         "--headless", action="store_true", help="Run in headless mode (no interactive terminal UI)"
     )
-
     parser.add_argument(
         "--fp16",
         action="store_true",
         default=True,
-        help="Enable FP16 half-precision inference for ensemble",
+        help="Enable FP16 half-precision inference for feature extraction",
     )
-    parser.add_argument(
-        "--no_fp16",
-        action="store_false",
-        dest="fp16",
-        help="Disable FP16 half-precision inference for ensemble",
-    )
-
     parser.add_argument(
         "--tracker",
         type=str,
         default="bytetrack.yaml",
         help="Tracker configuration filename (e.g. bytetrack.yaml, botsort.yaml) or custom config YAML path",
     )
-
     parser.add_argument(
         "--fusion-mode",
         type=str,
@@ -221,10 +190,8 @@ def main():
         dest="fusion_mode",
         help="Trajectory fusion mode for the postprocessing pipeline: "
         "'mean' = simple mean pooling, "
-        "'attention' = scaled dot-product self-attention, "
-        "'none' = disable postprocessing",
+        "'attention' = scaled dot-product self-attention",
     )
-
     parser.add_argument(
         "--enable-intra-camera-fusion",
         action="store_true",
@@ -241,34 +208,15 @@ def main():
 
     args = parser.parse_args()
 
-    raw_inputs = []
-    if args.inputs:
-        raw_inputs.extend(args.inputs)
-    if args.video_flags:
-        raw_inputs.extend(args.video_flags)
-    if args.dir:
-        raw_inputs.append(args.dir)
-    if args.video1:
-        raw_inputs.append(args.video1)
-    if args.video2:
-        raw_inputs.append(args.video2)
-
-    if not raw_inputs:
-        parser.error(
-            "No video inputs specified. Pass video file(s) or directory as positional arguments, or via --videos / --dir / --video1."
-        )
-
-    videos = collect_video_paths(raw_inputs)
+    target_dir = args.dir
+    videos = collect_video_paths(target_dir)
     if not videos:
-        parser.error("No valid video files found in specified input(s).")
+        parser.error(f"No valid video files found in specified directory: {target_dir}")
 
     feed_names = generate_feed_names(videos)
 
-    # Resolve paths
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    workspace_root = os.path.abspath(os.path.join(script_dir, ".."))
-
     output_path = os.path.abspath(args.output)
+    output_npz_path = os.path.abspath(args.output_npz)
 
     # Select appropriate listener based on mode
     if args.headless:
@@ -277,18 +225,16 @@ def main():
         listener = RichUIListener(videos, feed_names=feed_names)
 
     # Show configuration
-    model_dir = resolve_path("trained_model", workspace_root)
     config_data = {
+        "Video Directory": target_dir,
         "Video Sources": videos,
         "Feed Names": feed_names,
         "YOLO Model": args.yolo_model,
-        "ReID Threshold": f"{args.threshold:.2f}",
         "Device": str(args.device),
         "Max Frames": str(args.max_frames) if args.max_frames > 0 else "All",
         "Sample FPS": str(args.sample_fps) if args.sample_fps > 0 else "Full FPS",
-        "Output Path": output_path,
-        "Pipeline Mode": "Ensemble (Centroid Fusion)",
-        "Ensemble Model Dir": model_dir,
+        "JSON Output Path": output_path,
+        "NPZ Output Path": output_npz_path,
         "YOLO Tracker": args.tracker,
         "FP16 Enabled": str(args.fp16),
         "Intra-Camera Fusion": f"{args.enable_intra_camera_fusion} (threshold={args.intra_camera_threshold})",
@@ -335,7 +281,6 @@ def main():
 
     pipeline = ReIDPipeline(
         stages=stages,
-        threshold=args.threshold,
         max_frames=args.max_frames,
         registry=None,  # Assigned dynamically during run loop
     )
@@ -352,7 +297,7 @@ def main():
         pipeline.run(listener)
 
     # Export results outside the pipeline scope
-    export_results(registries, output_path)
+    export_results(registries, output_path, output_npz_path)
     if listener:
         listener.on_pipeline_end(registries, output_path)
 

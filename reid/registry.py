@@ -17,6 +17,17 @@ class SimpleRegistry:
         #   "compressed_track": dict | None         # serialised CompressedTrack
         # }
         self.identities: Dict[int, Dict[str, Any]] = {}
+        # secondary_track_id -> master_track_id
+        self.merged_track_map: Dict[int, int] = {}
+
+    def get_master_track_id(self, local_track_id: int) -> int:
+        """Resolve a local track ID to its root master track ID if it was merged."""
+        curr = local_track_id
+        visited = set()
+        while curr in self.merged_track_map and curr not in visited:
+            visited.add(curr)
+            curr = self.merged_track_map[curr]
+        return curr
 
     def update_track(
         self,
@@ -61,28 +72,43 @@ class SimpleRegistry:
         self, local_track_id: int, compressed_track_dict: Dict[str, Any]
     ) -> None:
         """Associate a serialized compressed track representation with the identity."""
-        if local_track_id not in self.identities:
-            self.identities[local_track_id] = {
+        target_id = self.get_master_track_id(local_track_id)
+        if target_id not in self.identities:
+            self.identities[target_id] = {
                 "appearance_embeddings": [],
                 "class_label": "unknown",
                 "feed_name": "",
                 "compressed_track": None,
             }
-        self.identities[local_track_id]["compressed_track"] = compressed_track_dict
+        self.identities[target_id]["compressed_track"] = compressed_track_dict
 
     def merge_tracks(self, primary_track_id: int, secondary_track_id: int) -> None:
         """Consolidate secondary_track_id into primary_track_id.
 
-        Merges appearance_embeddings and updates compressed_track, removing secondary_track_id.
+        Merges appearance_embeddings and updates compressed_track, removing secondary_track_id from registry.
         """
+        if primary_track_id == secondary_track_id:
+            return
+
+        # Resolve primary_track_id to root master track ID if primary was previously merged
+        root_primary = self.get_master_track_id(primary_track_id)
+
+        # Record secondary mapping
+        self.merged_track_map[secondary_track_id] = root_primary
+
+        # Update any previous tracks that pointed to secondary_track_id to point to root_primary
+        for s_id, p_id in list(self.merged_track_map.items()):
+            if p_id == secondary_track_id:
+                self.merged_track_map[s_id] = root_primary
+
         if secondary_track_id not in self.identities:
             return
 
-        if primary_track_id not in self.identities:
-            self.identities[primary_track_id] = self.identities.pop(secondary_track_id)
+        if root_primary not in self.identities:
+            self.identities[root_primary] = self.identities.pop(secondary_track_id)
             return
 
-        primary = self.identities[primary_track_id]
+        primary = self.identities[root_primary]
         secondary = self.identities.pop(secondary_track_id)
 
         primary["appearance_embeddings"].extend(secondary.get("appearance_embeddings", []))

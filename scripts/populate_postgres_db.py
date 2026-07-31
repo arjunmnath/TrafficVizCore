@@ -61,20 +61,20 @@ def parse_args():
     parser.add_argument(
         "--json_path",
         type=str,
-        default=str(workspace_root / "temp.noinclude.json"),
-        help="Path to temp.noinclude.json file containing track trajectories and metadata.",
+        required=True,
+        help="Path to registry.tracks.models.json file containing track trajectories and metadata.",
     )
     parser.add_argument(
         "--npz_path",
         type=str,
-        default=str(workspace_root / "temp.noinclude.npz"),
-        help="Path to temp.noinclude.npz file containing appearance embeddings.",
+        required=True,
+        help="Path to registry.reid.embeddings.npz file containing appearance embeddings.",
     )
     parser.add_argument(
         "--crops_dir",
         type=str,
-        default=str(workspace_root / "crops.noinclude"),
-        help="Directory containing candidate crop images (e.g. clip1_track_1.jpg).",
+        required=True,
+        help="Directory containing candidate crop images.",
     )
     parser.add_argument(
         "--reid_crops_dir",

@@ -552,8 +552,8 @@ def main() -> None:
         "-c",
         "--crops-dir",
         type=Path,
-        default=Path("crops.noinclude"),
-        help="Path to root crops directory (default: crops.noinclude)",
+        required=True,
+        help="Path to root crops directory",
     )
     parser.add_argument(
         "-t",

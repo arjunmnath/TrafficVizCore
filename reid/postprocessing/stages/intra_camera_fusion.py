@@ -67,6 +67,7 @@ class IntraCameraTrajectoryFusionStage(PostProcessingStage):
         fusion_mode: Literal["mean", "attention"] = "attention",
         temperature: float = 1.0,
         compressor: Optional[TrajectoryCompressor] = None,
+        registry: Optional[Any] = None,
     ) -> None:
         self.appearance_threshold = appearance_threshold
         self.max_time_gap = max_time_gap
@@ -76,6 +77,7 @@ class IntraCameraTrajectoryFusionStage(PostProcessingStage):
         self.fusion_mode = fusion_mode
         self.temperature = temperature
         self.compressor = compressor or TrajectoryCompressor()
+        self.registry = registry
 
         # Internal buffer: (feed_name, class_label) -> list of TerminatedTrack
         self._buffered_tracks: Dict[Tuple[str, str], List[TerminatedTrack]] = {}
@@ -140,11 +142,14 @@ class IntraCameraTrajectoryFusionStage(PostProcessingStage):
 
         self._buffered_tracks[key] = retained
 
-    def process(self, track: TerminatedTrack) -> TerminatedTrack:
+    def process(
+        self, track: TerminatedTrack, registry: Optional[Any] = None
+    ) -> TerminatedTrack:
         """Process a terminated track and merge it with candidate prior tracks if matched.
 
         Args:
             track: TerminatedTrack entering stage.
+            registry: Optional SimpleRegistry instance to update by merging and removing secondary tracks.
 
         Returns:
             The processed TerminatedTrack with master_track_id and fused representations updated.
@@ -228,6 +233,16 @@ class IntraCameraTrajectoryFusionStage(PostProcessingStage):
             # Merge track history, appearance embeddings, and re-fuse
             self._merge_tracks(best_candidate, track)
 
+            # Sync with registry if available
+            target_reg = registry or self.registry
+            if target_reg is not None and master_id != track.track_id:
+                target_reg.merge_tracks(master_id, track.track_id)
+                if track.compressed_track is not None:
+                    from tracking.serialization import JsonSerializer
+
+                    serialized_dict = JsonSerializer.serialize_to_dict(track.compressed_track)
+                    target_reg.add_compressed_track(master_id, serialized_dict)
+
             # Update best_candidate in buffer so subsequent matches build on updated trajectory
             for idx, item in enumerate(self._buffered_tracks[key]):
                 if item.track_id == best_candidate.track_id:
@@ -277,18 +292,23 @@ class IntraCameraTrajectoryFusionStage(PostProcessingStage):
             secondary.history = merged_history
 
         # 2. Merge appearance embeddings
-        if (
-            primary.appearance_embeddings is not None
-            and secondary.appearance_embeddings is not None
-        ):
-            p_emb = np.asarray(primary.appearance_embeddings, dtype=np.float32)
-            s_emb = np.asarray(secondary.appearance_embeddings, dtype=np.float32)
-            if p_emb.ndim == 1:
-                p_emb = p_emb[np.newaxis, :]
-            if s_emb.ndim == 1:
-                s_emb = s_emb[np.newaxis, :]
+        if primary.appearance_embeddings is not None or secondary.appearance_embeddings is not None:
+            if primary.appearance_embeddings is None:
+                merged_emb = np.asarray(secondary.appearance_embeddings, dtype=np.float32)
+            elif secondary.appearance_embeddings is None:
+                merged_emb = np.asarray(primary.appearance_embeddings, dtype=np.float32)
+            else:
+                p_emb = np.asarray(primary.appearance_embeddings, dtype=np.float32)
+                s_emb = np.asarray(secondary.appearance_embeddings, dtype=np.float32)
+                if p_emb.ndim == 1:
+                    p_emb = p_emb[np.newaxis, :]
+                if s_emb.ndim == 1:
+                    s_emb = s_emb[np.newaxis, :]
+                merged_emb = np.vstack([p_emb, s_emb])
 
-            merged_emb = np.vstack([p_emb, s_emb])
+            if merged_emb.ndim == 1:
+                merged_emb = merged_emb[np.newaxis, :]
+
             primary.appearance_embeddings = merged_emb
             secondary.appearance_embeddings = merged_emb
 
@@ -309,24 +329,34 @@ class IntraCameraTrajectoryFusionStage(PostProcessingStage):
             if frames and timestamps and bboxes:
                 bbox_tuples = [tuple(b) for b in bboxes]
                 master_id = primary.master_track_id or primary.track_id
-                compressed = self.compressor.compress(
-                    track_id=master_id,
-                    camera_id=primary.feed_name,
-                    class_label=primary.class_label,
-                    frames=frames,
-                    timestamps=timestamps,
-                    bboxes=bbox_tuples,
-                )
-                primary.compressed_track = compressed
-                secondary.compressed_track = compressed
-                primary.extra["compressed_track"] = compressed
-                secondary.extra["compressed_track"] = compressed
+                try:
+                    compressed = self.compressor.compress(
+                        track_id=master_id,
+                        camera_id=primary.feed_name,
+                        class_label=primary.class_label,
+                        frames=frames,
+                        timestamps=timestamps,
+                        bboxes=bbox_tuples,
+                    )
+                    primary.compressed_track = compressed
+                    secondary.compressed_track = compressed
+                    primary.extra["compressed_track"] = compressed
+                    secondary.extra["compressed_track"] = compressed
+                except Exception:
+                    pass
 
-    def process_tracks(self, tracks: List[TerminatedTrack]) -> List[TerminatedTrack]:
+    def process_tracks(
+        self,
+        tracks: List[TerminatedTrack],
+        registry: Optional[Any] = None,
+        return_masters_only: bool = False,
+    ) -> List[TerminatedTrack]:
         """Batch process a list of TerminatedTracks for offline camera feed trajectory fusion.
 
         Args:
             tracks: List of TerminatedTrack objects.
+            registry: Optional SimpleRegistry instance to update by removing secondary tracks.
+            return_masters_only: If True, only returns master tracks (secondary tracks filtered out).
 
         Returns:
             List of processed TerminatedTrack objects with master_track_ids updated.
@@ -335,7 +365,9 @@ class IntraCameraTrajectoryFusionStage(PostProcessingStage):
         sorted_tracks = sorted(tracks, key=lambda t: self._get_track_time_range(t)[0])
         processed = []
         for t in sorted_tracks:
-            processed.append(self.process(t))
+            processed.append(self.process(t, registry=registry))
+        if return_masters_only:
+            processed = [t for t in processed if not t.extra.get("intra_camera_fused")]
         return processed
 
     def __repr__(self) -> str:

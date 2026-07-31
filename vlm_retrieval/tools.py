@@ -34,7 +34,7 @@ class InferenceToolRegistry:
         return [
             {
                 "name": "encode_and_search_vector_store",
-                "description": "Performs text/image embedding similarity search against the PostgreSQL pgvector or NPZ track event database.",
+                "description": "Performs text/image embedding similarity search against the vector store or NPZ track event store.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -56,7 +56,7 @@ class InferenceToolRegistry:
             },
             {
                 "name": "search_npz_embeddings",
-                "description": "Performs text/image embedding similarity search directly on an .npz file directory or file, bypassing PostgreSQL database requirements.",
+                "description": "Performs text/image embedding similarity search directly on an .npz file directory or file.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -82,7 +82,7 @@ class InferenceToolRegistry:
             },
             {
                 "name": "query_metadata",
-                "description": "Queries track event metadata (camera ID, time window, vehicle/person attributes, track ID) from PostgreSQL or NPZ store.",
+                "description": "Queries track event metadata (camera ID, time window, vehicle/person attributes, track ID) from vector store or NPZ records.",
                 "parameters": {
                     "type": "object",
                     "properties": {

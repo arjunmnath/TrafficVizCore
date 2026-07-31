@@ -66,7 +66,7 @@ class BaseAgenticVLMReasoner(ABC):
         # Step 1: Encoded Vector Search
         step1 = AgenticPlanStep(
             step_number=1,
-            thought="Step 1: Execute embedding vector search using text/image encoder over PostgreSQL pgvector.",
+            thought="Step 1: Execute embedding vector search using text/image encoder over vector store.",
         )
         call1_args = {"query_text": query, "top_k": 10, "camera_id": camera_id_filter}
         res1 = tools.execute_tool("call_search_1", "encode_and_search_vector_store", call1_args)

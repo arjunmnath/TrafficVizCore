@@ -61,10 +61,8 @@ def parse_args():
     parser.add_argument(
         "--npz_path",
         type=str,
-        default=str(workspace_root / "registry.embeddings.npz")
-        if (workspace_root / "registry.embeddings.npz").exists()
-        else (str(workspace_root / "temp.noinclude.npz") if (workspace_root / "temp.noinclude.npz").exists() else None),
-        help="Path to single .npz embeddings file.",
+        required=True,
+        help="Path to .npz embeddings file.",
     )
     parser.add_argument(
         "--npz_dir",
@@ -75,9 +73,7 @@ def parse_args():
     parser.add_argument(
         "--json_path",
         type=str,
-        default=str(workspace_root / "registry.tracks.json")
-        if (workspace_root / "registry.tracks.json").exists()
-        else (str(workspace_root / "temp.noinclude.json") if (workspace_root / "temp.noinclude.json").exists() else None),
+        required=True,
         help="Path to registry JSON metadata file.",
     )
     parser.add_argument(

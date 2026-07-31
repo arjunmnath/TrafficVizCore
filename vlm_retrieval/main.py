@@ -22,10 +22,6 @@ def run_vlm_retrieval(config: VLMRetrievalConfig, query_text: str | None = None)
 
     logger.info("Connecting to VectorStore via NPZ & Tracks JSON...")
     vector_store = VectorStore(
-        table_name=config.postgres_table,
-        postgres_url=config.postgres_url,
-        supabase_url=config.supabase_url,
-        supabase_key=config.supabase_key,
         npz_dir=config.npz_dir,
         npz_path=config.npz_path,
         json_path=config.json_path,
@@ -101,10 +97,6 @@ if __name__ == "__main__":
     parser.add_argument("--npz_dir", type=str, default=None, help="Directory containing .npz embedding files.")
     parser.add_argument("--npz_path", type=str, default=None, help="Path to single .npz embeddings file.")
     parser.add_argument("--json_path", type=str, default=None, help="Path to accompanying tracks .json metadata file.")
-    parser.add_argument("--postgres_table", type=str, default="track_events")
-    parser.add_argument("--postgres_url", type=str, default=None)
-    parser.add_argument("--supabase_url", type=str, default=None)
-    parser.add_argument("--supabase_key", type=str, default=None)
     parser.add_argument(
         "--retrieval_model",
         type=str,
@@ -139,10 +131,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config = VLMRetrievalConfig(
-        postgres_table=args.postgres_table,
-        postgres_url=args.postgres_url,
-        supabase_url=args.supabase_url,
-        supabase_key=args.supabase_key,
         npz_dir=args.npz_dir,
         npz_path=args.npz_path,
         json_path=args.json_path,
