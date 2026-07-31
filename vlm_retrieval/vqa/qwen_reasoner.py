@@ -19,6 +19,11 @@ from vlm_retrieval.vqa.types import AgenticPlanStep, RankedResult, ToolCallSpec,
 from shared.utils import setup_logger
 
 
+# Max characters for tool result text before truncation.
+# Keeps context window manageable on <=16GB GPUs.
+_MAX_TOOL_RESULT_CHARS = 3000
+
+
 class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
     """On-device VLM Reasoner using Qwen3-VL via Hugging Face Transformers."""
 
@@ -60,14 +65,14 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
         resolved_device_map = self.device_map or "balanced"
 
         load_kwargs = {
-            "torch_dtype": target_dtype,
+            "dtype": target_dtype,
             "device_map": resolved_device_map,
             "trust_remote_code": True,
             "low_cpu_mem_usage": True,
         }
         self.logger.info(
             f"Loading with device_map='{resolved_device_map}', "
-            f"torch_dtype={target_dtype}, low_cpu_mem_usage=True"
+            f"dtype={target_dtype}, low_cpu_mem_usage=True"
         )
 
         try:
@@ -106,6 +111,38 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
 
         return self._run_react_loop(query, tools, max_steps, camera_id_filter)
 
+    def _build_compact_system_prompt(self) -> str:
+        """Build a compact system prompt for Qwen that avoids duplicating tool
+        schemas (apply_chat_template already injects them via tools=...)."""
+        return (
+            "You are Qwen3-VL, an expert CCTV AI Agent performing multi-camera "
+            "target search and visual reasoning.\n\n"
+            "## Execution Model\n"
+            "You operate in a ReAct loop: Think → Act → Observe → Think → ...\n"
+            "- Produce only the NEXT logical step, not an entire plan.\n"
+            "- Call ONE tool at a time. Wait for its result before deciding next.\n"
+            "- Tool outputs are the ONLY source of truth. Never fabricate results.\n"
+            "- When you have sufficient evidence, produce a final answer with NO tool calls.\n\n"
+            "## Tool Rules\n"
+            "- `encode_and_search_vector_store`: retrieves candidates. Does NOT verify.\n"
+            "- `inspect_visual_candidate`: extracts a frame crop and returns it. "
+            "YOU analyze the image and judge if it matches.\n"
+            "- `get_temporal_context`: finds nearby events for relationship queries.\n"
+            "- `query_metadata`: filters by camera_id/timestamp/class only.\n\n"
+            "## Relationship Queries\n"
+            "For queries like 'bus followed by car': verify first object, use "
+            "`get_temporal_context` for the second, then inspect.\n\n"
+            "## Final Answer\n"
+            "When done, respond with analysis and:\n"
+            "<final_answer>\n"
+            '{"candidates": [{"camera_id": "...", "video_pos_ms": ..., '
+            '"track_id": ..., "confidence": 0.0-1.0, '
+            '"explanation": "evidence from inspection"}]}\n'
+            "</final_answer>\n\n"
+            "To call a tool, use:\n"
+            '<tool_call>\n{"name": "tool_name", "arguments": {"key": "value"}}\n</tool_call>'
+        )
+
     def _run_react_loop(
         self,
         query: str,
@@ -116,16 +153,15 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
         trajectory: List[AgenticPlanStep] = []
         tool_decls = tools.get_tool_declarations()
 
-        # Build system prompt with tool call format instructions
-        system_text = (
-            self._build_system_prompt(tools, model_display_name="Qwen3-VL")
-            + "\n\nTo invoke a tool, output JSON in a tool_call block:\n"
-            '<tool_call>\n{"name": "tool_name", "arguments": {"arg1": "val1"}}\n</tool_call>'
-        )
+        # Use compact system prompt — apply_chat_template(tools=...) adds
+        # the full tool schemas separately, so we don't duplicate them.
+        system_text = self._build_compact_system_prompt()
+
+        user_msg = self._build_user_message(query, camera_id_filter)
 
         messages: List[Dict[str, Any]] = [
             {"role": "system", "content": system_text},
-            {"role": "user", "content": self._build_user_message(query, camera_id_filter)},
+            {"role": "user", "content": user_msg},
         ]
 
         target_device = (
@@ -136,6 +172,9 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
         call_counter = 0
 
         for step_idx in range(1, max_steps + 1):
+            # Free cached GPU memory before each generation
+            torch.cuda.empty_cache()
+
             # Process vision inputs from message history
             try:
                 from qwen_vl_utils import process_vision_info
@@ -164,16 +203,28 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
                 return_tensors="pt",
             ).to(target_device)
 
+            seq_len = inputs.input_ids.shape[-1]
+            self.logger.info(f"[Step {step_idx}] Input sequence length: {seq_len} tokens")
+
             with torch.no_grad():
-                generated_ids = self.model.generate(**inputs, max_new_tokens=1024)
+                generated_ids = self.model.generate(**inputs, max_new_tokens=512)
+
+            # Free input tensors immediately
+            del inputs
+            torch.cuda.empty_cache()
 
             generated_ids_trimmed = [
                 out_ids[len(in_ids):]
-                for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+                for in_ids, out_ids in zip(
+                    generated_ids[:, :seq_len] if seq_len else generated_ids,
+                    generated_ids,
+                )
             ]
             output_text = self.processor.batch_decode(
                 generated_ids_trimmed, skip_special_tokens=True
             )[0]
+            del generated_ids, generated_ids_trimmed
+            torch.cuda.empty_cache()
 
             self.logger.info(f"[Step {step_idx}] Qwen3-VL Output: {output_text}")
             step = AgenticPlanStep(step_number=step_idx, thought=output_text)
@@ -218,6 +269,39 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
 
         return trajectory, ranked_results
 
+    def _truncate_tool_content(self, content: Any) -> str:
+        """Serialize tool content to JSON and truncate if too large.
+
+        Large tool results (e.g., 20 search candidates with full metadata)
+        can blow up the context window on memory-constrained GPUs. We keep
+        the essential structure but truncate oversized payloads.
+        """
+        text = json.dumps(content) if isinstance(content, (dict, list)) else str(content)
+
+        if len(text) <= _MAX_TOOL_RESULT_CHARS:
+            return text
+
+        # For search results, keep only the most relevant fields per candidate
+        if isinstance(content, dict) and "candidates" in content:
+            compact = {
+                "count": content.get("count", 0),
+                "candidates": [],
+            }
+            for cand in content.get("candidates", []):
+                compact["candidates"].append({
+                    "camera_id": cand.get("camera_id"),
+                    "track_id": cand.get("track_id"),
+                    "video_pos_ms": cand.get("video_pos_ms"),
+                    "bbox": cand.get("bbox"),
+                    "retrieval_distance": cand.get("retrieval_distance"),
+                })
+            text = json.dumps(compact)
+            if len(text) <= _MAX_TOOL_RESULT_CHARS:
+                return text
+
+        # Hard truncation as last resort
+        return text[:_MAX_TOOL_RESULT_CHARS] + '... (truncated)'
+
     def _format_tool_response(
         self,
         tool_name: str,
@@ -229,18 +313,21 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
         If the tool returned extracted images, they are included as image
         content parts so Qwen's vision encoder can process them.
         """
-        content_text = (
-            json.dumps(tool_res.content)
-            if isinstance(tool_res.content, (dict, list))
-            else str(tool_res.content)
-        )
+        content_text = self._truncate_tool_content(tool_res.content)
 
         if tool_res.extracted_images:
+            # Resize images to reduce vision encoder memory
+            resized_images = []
+            for img in tool_res.extracted_images:
+                img_copy = img.copy()
+                img_copy.thumbnail((384, 384))
+                resized_images.append(img_copy)
+
             # Multi-modal response: text + images
             content_list: List[Dict[str, Any]] = [
                 {"type": "text", "text": content_text}
             ]
-            for img in tool_res.extracted_images:
+            for img in resized_images:
                 content_list.append({"type": "image", "image": img})
 
             # Try native tool role first, fall back to user role
@@ -256,7 +343,7 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
                     "role": "user",
                     "content": [
                         {"type": "text", "text": f"<tool_response>\n{content_text}\n</tool_response>"}
-                    ] + [{"type": "image", "image": img} for img in tool_res.extracted_images],
+                    ] + [{"type": "image", "image": img} for img in resized_images],
                 }
         else:
             # Text-only response
