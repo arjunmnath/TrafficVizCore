@@ -229,3 +229,5 @@ def _extract_semantic_text(text: str, spans: List[Tuple[int, int]]) -> str:
         r"\b(?:at|on|from|in|during|show|find|all|the)\b", " ", semantic, flags=re.IGNORECASE
     )
     return re.sub(r"\s+", " ", semantic).strip()
+
+

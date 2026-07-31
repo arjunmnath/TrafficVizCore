@@ -1,11 +1,16 @@
-"""Multistage Agentic Planning VLM Pipeline replacing single-step RAG retrieval."""
+"""Agentic Pipeline — thin orchestration layer over the ReAct-style VLM reasoner.
+
+The pipeline wires together the retrieval engine, vector store, frame extractor,
+and VLM reasoner. It delegates all planning and tool execution to the reasoner's
+ReAct loop and converts the final results into QueryResultItem objects.
+"""
 
 from __future__ import annotations
 
 import base64
 import io
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from PIL import Image
 
@@ -14,12 +19,18 @@ from vlm_retrieval.retrieval.search import RetrievalEngine
 from vlm_retrieval.retrieval.vector_store import VectorStore
 from vlm_retrieval.tools import InferenceToolRegistry
 from vlm_retrieval.vqa import BaseAgenticVLMReasoner
+from vlm_retrieval.vqa.types import AgenticPlanStep, RankedResult
 from shared.schemas import QueryResultItem
 from shared.utils import setup_logger
 
 
 class AgenticPlannerPipeline:
-    """Orchestrates multistage tool-assisted perception, vector search, metadata filtering, and visual inspection."""
+    """Orchestrates the ReAct-style agentic VLM retrieval pipeline.
+
+    External API is unchanged: callers use `query()` or `query_with_trajectory()`.
+    Internally, all planning, tool execution, and evidence accumulation is
+    handled by the VLM reasoner's ReAct loop.
+    """
 
     def __init__(
         self,
@@ -56,8 +67,8 @@ class AgenticPlannerPipeline:
         top_k: Optional[int] = None,
         camera_id: Optional[str] = None,
     ) -> Tuple[List[QueryResultItem], List[AgenticPlanStep]]:
-        """Execute the multistage agentic planning pipeline and return both final results and execution trajectory."""
-        self.logger.info(f"Executing Agentic Planning VLM pipeline for query: '{query_text}'")
+        """Execute the ReAct agentic pipeline and return both final results and execution trajectory."""
+        self.logger.info(f"Executing ReAct VLM pipeline for query: '{query_text}'")
 
         trajectory, ranked_results = self.reasoner.plan_and_execute(
             query=query_text,
@@ -71,9 +82,9 @@ class AgenticPlannerPipeline:
 
         results: List[QueryResultItem] = []
         for index, result in enumerate(final_ranked):
-            ts_human = datetime.fromtimestamp(result.camera_timestamp, tz=timezone.utc).strftime(
-                "%Y-%m-%d %H:%M:%S UTC"
-            )
+            ts_human = datetime.fromtimestamp(
+                result.camera_timestamp, tz=timezone.utc
+            ).strftime("%Y-%m-%d %H:%M:%S UTC")
 
             thumbnail = None
             if result.frame:
@@ -107,6 +118,8 @@ class AgenticPlannerPipeline:
         top_k: Optional[int] = None,
         camera_id: Optional[str] = None,
     ) -> List[QueryResultItem]:
-        """Execute the multistage agentic planning pipeline and return final results."""
-        results, _ = self.query_with_trajectory(query_text=query_text, top_k=top_k, camera_id=camera_id)
+        """Execute the ReAct agentic pipeline and return final results."""
+        results, _ = self.query_with_trajectory(
+            query_text=query_text, top_k=top_k, camera_id=camera_id
+        )
         return results

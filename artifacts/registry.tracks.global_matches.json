@@ -1,461 +1,1682 @@
 [
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 5,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 128,
-    "class_b": "motorcycle",
-    "similarity": 0.850389
+    "global_id": "global_veh_1",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_64",
+      "clip2.mp4_118"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 64,
+        "track_key": "clip1.mp4_64",
+        "class_label": "car"
+      },
+      {
+        "feed": "clip2.mp4",
+        "track_id": 118,
+        "track_key": "clip2.mp4_118",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4",
+      "clip2.mp4"
+    ],
+    "num_tracks": 2,
+    "matches": [
+      {
+        "feed_a": "clip1.mp4",
+        "track_a": 64,
+        "class_a": "car",
+        "feed_b": "clip2.mp4",
+        "track_b": 118,
+        "class_b": "car",
+        "similarity": 0.630298
+      }
+    ]
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 5,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 118,
-    "class_b": "car",
-    "similarity": 0.84999
+    "global_id": "global_veh_2",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip1.mp4_29",
+      "clip2.mp4_128"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 29,
+        "track_key": "clip1.mp4_29",
+        "class_label": "motorcycle"
+      },
+      {
+        "feed": "clip2.mp4",
+        "track_id": 128,
+        "track_key": "clip2.mp4_128",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4",
+      "clip2.mp4"
+    ],
+    "num_tracks": 2,
+    "matches": [
+      {
+        "feed_a": "clip1.mp4",
+        "track_a": 29,
+        "class_a": "motorcycle",
+        "feed_b": "clip2.mp4",
+        "track_b": 128,
+        "class_b": "motorcycle",
+        "similarity": 0.740053
+      }
+    ]
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 190,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 128,
-    "class_b": "motorcycle",
-    "similarity": 0.803251
+    "global_id": "global_veh_3",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip1.mp4_2",
+      "clip2.mp4_138"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 2,
+        "track_key": "clip1.mp4_2",
+        "class_label": "motorcycle"
+      },
+      {
+        "feed": "clip2.mp4",
+        "track_id": 138,
+        "track_key": "clip2.mp4_138",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4",
+      "clip2.mp4"
+    ],
+    "num_tracks": 2,
+    "matches": [
+      {
+        "feed_a": "clip1.mp4",
+        "track_a": 2,
+        "class_a": "motorcycle",
+        "feed_b": "clip2.mp4",
+        "track_b": 138,
+        "class_b": "motorcycle",
+        "similarity": 0.643075
+      }
+    ]
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 190,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 118,
-    "class_b": "car",
-    "similarity": 0.798875
+    "global_id": "global_veh_4",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_52",
+      "clip2.mp4_155"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 52,
+        "track_key": "clip1.mp4_52",
+        "class_label": "car"
+      },
+      {
+        "feed": "clip2.mp4",
+        "track_id": 155,
+        "track_key": "clip2.mp4_155",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4",
+      "clip2.mp4"
+    ],
+    "num_tracks": 2,
+    "matches": [
+      {
+        "feed_a": "clip1.mp4",
+        "track_a": 52,
+        "class_a": "car",
+        "feed_b": "clip2.mp4",
+        "track_b": 155,
+        "class_b": "car",
+        "similarity": 0.707406
+      }
+    ]
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 125,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 128,
-    "class_b": "motorcycle",
-    "similarity": 0.785614
+    "global_id": "global_veh_5",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_137",
+      "clip2.mp4_17"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 137,
+        "track_key": "clip1.mp4_137",
+        "class_label": "car"
+      },
+      {
+        "feed": "clip2.mp4",
+        "track_id": 17,
+        "track_key": "clip2.mp4_17",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4",
+      "clip2.mp4"
+    ],
+    "num_tracks": 2,
+    "matches": [
+      {
+        "feed_a": "clip1.mp4",
+        "track_a": 137,
+        "class_a": "car",
+        "feed_b": "clip2.mp4",
+        "track_b": 17,
+        "class_b": "car",
+        "similarity": 0.634879
+      }
+    ]
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 125,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 223,
-    "class_b": "motorcycle",
-    "similarity": 0.777479
+    "global_id": "global_veh_6",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip1.mp4_125",
+      "clip2.mp4_223"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 125,
+        "track_key": "clip1.mp4_125",
+        "class_label": "motorcycle"
+      },
+      {
+        "feed": "clip2.mp4",
+        "track_id": 223,
+        "track_key": "clip2.mp4_223",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4",
+      "clip2.mp4"
+    ],
+    "num_tracks": 2,
+    "matches": [
+      {
+        "feed_a": "clip1.mp4",
+        "track_a": 125,
+        "class_a": "motorcycle",
+        "feed_b": "clip2.mp4",
+        "track_b": 223,
+        "class_b": "motorcycle",
+        "similarity": 0.777479
+      }
+    ]
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 10,
-    "class_a": "bus",
-    "feed_b": "clip2.mp4",
-    "track_b": 79,
-    "class_b": "bus",
-    "similarity": 0.759488
+    "global_id": "global_veh_7",
+    "class_label": "truck",
+    "tracks": [
+      "clip1.mp4_245",
+      "clip2.mp4_44"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 245,
+        "track_key": "clip1.mp4_245",
+        "class_label": "truck"
+      },
+      {
+        "feed": "clip2.mp4",
+        "track_id": 44,
+        "track_key": "clip2.mp4_44",
+        "class_label": "truck"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4",
+      "clip2.mp4"
+    ],
+    "num_tracks": 2,
+    "matches": [
+      {
+        "feed_a": "clip1.mp4",
+        "track_a": 245,
+        "class_a": "truck",
+        "feed_b": "clip2.mp4",
+        "track_b": 44,
+        "class_b": "truck",
+        "similarity": 0.607127
+      }
+    ]
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 29,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 128,
-    "class_b": "motorcycle",
-    "similarity": 0.740053
+    "global_id": "global_veh_8",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip1.mp4_5",
+      "clip2.mp4_6"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 5,
+        "track_key": "clip1.mp4_5",
+        "class_label": "motorcycle"
+      },
+      {
+        "feed": "clip2.mp4",
+        "track_id": 6,
+        "track_key": "clip2.mp4_6",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4",
+      "clip2.mp4"
+    ],
+    "num_tracks": 2,
+    "matches": [
+      {
+        "feed_a": "clip1.mp4",
+        "track_a": 5,
+        "class_a": "motorcycle",
+        "feed_b": "clip2.mp4",
+        "track_b": 6,
+        "class_b": "motorcycle",
+        "similarity": 0.730149
+      }
+    ]
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 275,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 118,
-    "class_b": "car",
-    "similarity": 0.739716
+    "global_id": "global_veh_9",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_9",
+      "clip2.mp4_7"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 9,
+        "track_key": "clip1.mp4_9",
+        "class_label": "car"
+      },
+      {
+        "feed": "clip2.mp4",
+        "track_id": 7,
+        "track_key": "clip2.mp4_7",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4",
+      "clip2.mp4"
+    ],
+    "num_tracks": 2,
+    "matches": [
+      {
+        "feed_a": "clip1.mp4",
+        "track_a": 9,
+        "class_a": "car",
+        "feed_b": "clip2.mp4",
+        "track_b": 7,
+        "class_b": "car",
+        "similarity": 0.645481
+      }
+    ]
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 5,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 6,
-    "class_b": "motorcycle",
-    "similarity": 0.730149
+    "global_id": "global_veh_10",
+    "class_label": "bus",
+    "tracks": [
+      "clip1.mp4_10",
+      "clip2.mp4_79"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 10,
+        "track_key": "clip1.mp4_10",
+        "class_label": "bus"
+      },
+      {
+        "feed": "clip2.mp4",
+        "track_id": 79,
+        "track_key": "clip2.mp4_79",
+        "class_label": "bus"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4",
+      "clip2.mp4"
+    ],
+    "num_tracks": 2,
+    "matches": [
+      {
+        "feed_a": "clip1.mp4",
+        "track_a": 10,
+        "class_a": "bus",
+        "feed_b": "clip2.mp4",
+        "track_b": 79,
+        "class_b": "bus",
+        "similarity": 0.759488
+      }
+    ]
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 5,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 223,
-    "class_b": "motorcycle",
-    "similarity": 0.727338
+    "global_id": "global_veh_11",
+    "class_label": "truck",
+    "tracks": [
+      "clip1.mp4_1"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 1,
+        "track_key": "clip1.mp4_1",
+        "class_label": "truck"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 9,
-    "class_a": "car",
-    "feed_b": "clip2.mp4",
-    "track_b": 118,
-    "class_b": "car",
-    "similarity": 0.714271
+    "global_id": "global_veh_12",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_109"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 109,
+        "track_key": "clip1.mp4_109",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 5,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 264,
-    "class_b": "car",
-    "similarity": 0.713443
+    "global_id": "global_veh_13",
+    "class_label": "truck",
+    "tracks": [
+      "clip1.mp4_129"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 129,
+        "track_key": "clip1.mp4_129",
+        "class_label": "truck"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 52,
-    "class_a": "car",
-    "feed_b": "clip2.mp4",
-    "track_b": 155,
-    "class_b": "car",
-    "similarity": 0.707406
+    "global_id": "global_veh_14",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_135"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 135,
+        "track_key": "clip1.mp4_135",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 275,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 128,
-    "class_b": "motorcycle",
-    "similarity": 0.703241
+    "global_id": "global_veh_15",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_145"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 145,
+        "track_key": "clip1.mp4_145",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 9,
-    "class_a": "car",
-    "feed_b": "clip2.mp4",
-    "track_b": 264,
-    "class_b": "car",
-    "similarity": 0.702297
+    "global_id": "global_veh_16",
+    "class_label": "truck",
+    "tracks": [
+      "clip1.mp4_16"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 16,
+        "track_key": "clip1.mp4_16",
+        "class_label": "truck"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 245,
-    "class_a": "truck",
-    "feed_b": "clip2.mp4",
-    "track_b": 31,
-    "class_b": "car",
-    "similarity": 0.694039
+    "global_id": "global_veh_17",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_165"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 165,
+        "track_key": "clip1.mp4_165",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 5,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 3,
-    "class_b": "motorcycle",
-    "similarity": 0.685599
+    "global_id": "global_veh_18",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_175"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 175,
+        "track_key": "clip1.mp4_175",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 220,
-    "class_a": "bus",
-    "feed_b": "clip2.mp4",
-    "track_b": 4,
-    "class_b": "truck",
-    "similarity": 0.685424
+    "global_id": "global_veh_19",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip1.mp4_190"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 190,
+        "track_key": "clip1.mp4_190",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 245,
-    "class_a": "truck",
-    "feed_b": "clip2.mp4",
-    "track_b": 15,
-    "class_b": "car",
-    "similarity": 0.684213
+    "global_id": "global_veh_20",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_196"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 196,
+        "track_key": "clip1.mp4_196",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 5,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 160,
-    "class_b": "motorcycle",
-    "similarity": 0.682955
+    "global_id": "global_veh_21",
+    "class_label": "truck",
+    "tracks": [
+      "clip1.mp4_198"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 198,
+        "track_key": "clip1.mp4_198",
+        "class_label": "truck"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 2,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 128,
-    "class_b": "motorcycle",
-    "similarity": 0.680565
+    "global_id": "global_veh_22",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_202"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 202,
+        "track_key": "clip1.mp4_202",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 125,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 118,
-    "class_b": "car",
-    "similarity": 0.678767
+    "global_id": "global_veh_23",
+    "class_label": "truck",
+    "tracks": [
+      "clip1.mp4_205"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 205,
+        "track_key": "clip1.mp4_205",
+        "class_label": "truck"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 245,
-    "class_a": "truck",
-    "feed_b": "clip2.mp4",
-    "track_b": 40,
-    "class_b": "truck",
-    "similarity": 0.669717
+    "global_id": "global_veh_24",
+    "class_label": "truck",
+    "tracks": [
+      "clip1.mp4_207"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 207,
+        "track_key": "clip1.mp4_207",
+        "class_label": "truck"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 2,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 223,
-    "class_b": "motorcycle",
-    "similarity": 0.666805
+    "global_id": "global_veh_25",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_208"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 208,
+        "track_key": "clip1.mp4_208",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 125,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 138,
-    "class_b": "motorcycle",
-    "similarity": 0.666652
+    "global_id": "global_veh_26",
+    "class_label": "bus",
+    "tracks": [
+      "clip1.mp4_220"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 220,
+        "track_key": "clip1.mp4_220",
+        "class_label": "bus"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 190,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 223,
-    "class_b": "motorcycle",
-    "similarity": 0.653501
+    "global_id": "global_veh_27",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_23"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 23,
+        "track_key": "clip1.mp4_23",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 190,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 264,
-    "class_b": "car",
-    "similarity": 0.649806
+    "global_id": "global_veh_28",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_238"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 238,
+        "track_key": "clip1.mp4_238",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 190,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 3,
-    "class_b": "motorcycle",
-    "similarity": 0.648005
+    "global_id": "global_veh_29",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip1.mp4_25"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 25,
+        "track_key": "clip1.mp4_25",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 9,
-    "class_a": "car",
-    "feed_b": "clip2.mp4",
-    "track_b": 7,
-    "class_b": "car",
-    "similarity": 0.645481
+    "global_id": "global_veh_30",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip1.mp4_269"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 269,
+        "track_key": "clip1.mp4_269",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 190,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 6,
-    "class_b": "motorcycle",
-    "similarity": 0.643707
+    "global_id": "global_veh_31",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip1.mp4_275"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 275,
+        "track_key": "clip1.mp4_275",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 2,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 138,
-    "class_b": "motorcycle",
-    "similarity": 0.643075
+    "global_id": "global_veh_32",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip1.mp4_276"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 276,
+        "track_key": "clip1.mp4_276",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 276,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 44,
-    "class_b": "truck",
-    "similarity": 0.641421
+    "global_id": "global_veh_33",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip1.mp4_3"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 3,
+        "track_key": "clip1.mp4_3",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 245,
-    "class_a": "truck",
-    "feed_b": "clip2.mp4",
-    "track_b": 48,
-    "class_b": "truck",
-    "similarity": 0.637832
+    "global_id": "global_veh_34",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_32"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 32,
+        "track_key": "clip1.mp4_32",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 238,
-    "class_a": "car",
-    "feed_b": "clip2.mp4",
-    "track_b": 17,
-    "class_b": "car",
-    "similarity": 0.637514
+    "global_id": "global_veh_35",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip1.mp4_6"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 6,
+        "track_key": "clip1.mp4_6",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 137,
-    "class_a": "car",
-    "feed_b": "clip2.mp4",
-    "track_b": 17,
-    "class_b": "car",
-    "similarity": 0.634879
+    "global_id": "global_veh_36",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_63"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 63,
+        "track_key": "clip1.mp4_63",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 276,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 31,
-    "class_b": "car",
-    "similarity": 0.633601
+    "global_id": "global_veh_37",
+    "class_label": "car",
+    "tracks": [
+      "clip1.mp4_8"
+    ],
+    "track_details": [
+      {
+        "feed": "clip1.mp4",
+        "track_id": 8,
+        "track_key": "clip1.mp4_8",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip1.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 64,
-    "class_a": "car",
-    "feed_b": "clip2.mp4",
-    "track_b": 118,
-    "class_b": "car",
-    "similarity": 0.630298
+    "global_id": "global_veh_38",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_1"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 1,
+        "track_key": "clip2.mp4_1",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 175,
-    "class_a": "car",
-    "feed_b": "clip2.mp4",
-    "track_b": 118,
-    "class_b": "car",
-    "similarity": 0.626327
+    "global_id": "global_veh_39",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_10"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 10,
+        "track_key": "clip2.mp4_10",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 5,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 10,
-    "class_b": "car",
-    "similarity": 0.621044
+    "global_id": "global_veh_40",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip2.mp4_13"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 13,
+        "track_key": "clip2.mp4_13",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 125,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 160,
-    "class_b": "motorcycle",
-    "similarity": 0.618821
+    "global_id": "global_veh_41",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_136"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 136,
+        "track_key": "clip2.mp4_136",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 63,
-    "class_a": "car",
-    "feed_b": "clip2.mp4",
-    "track_b": 118,
-    "class_b": "car",
-    "similarity": 0.617345
+    "global_id": "global_veh_42",
+    "class_label": "truck",
+    "tracks": [
+      "clip2.mp4_143"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 143,
+        "track_key": "clip2.mp4_143",
+        "class_label": "truck"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 276,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 40,
-    "class_b": "truck",
-    "similarity": 0.615975
+    "global_id": "global_veh_43",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_15"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 15,
+        "track_key": "clip2.mp4_15",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 129,
-    "class_a": "truck",
-    "feed_b": "clip2.mp4",
-    "track_b": 6,
-    "class_b": "motorcycle",
-    "similarity": 0.613753
+    "global_id": "global_veh_44",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip2.mp4_160"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 160,
+        "track_key": "clip2.mp4_160",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 276,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 49,
-    "class_b": "car",
-    "similarity": 0.611585
+    "global_id": "global_veh_45",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_168"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 168,
+        "track_key": "clip2.mp4_168",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 5,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 138,
-    "class_b": "motorcycle",
-    "similarity": 0.609717
+    "global_id": "global_veh_46",
+    "class_label": "truck",
+    "tracks": [
+      "clip2.mp4_198"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 198,
+        "track_key": "clip2.mp4_198",
+        "class_label": "truck"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 276,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 15,
-    "class_b": "car",
-    "similarity": 0.609253
+    "global_id": "global_veh_47",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_2"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 2,
+        "track_key": "clip2.mp4_2",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 64,
-    "class_a": "car",
-    "feed_b": "clip2.mp4",
-    "track_b": 10,
-    "class_b": "car",
-    "similarity": 0.607328
+    "global_id": "global_veh_48",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_205"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 205,
+        "track_key": "clip2.mp4_205",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 245,
-    "class_a": "truck",
-    "feed_b": "clip2.mp4",
-    "track_b": 44,
-    "class_b": "truck",
-    "similarity": 0.607127
+    "global_id": "global_veh_49",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_224"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 224,
+        "track_key": "clip2.mp4_224",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 125,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 48,
-    "class_b": "truck",
-    "similarity": 0.606451
+    "global_id": "global_veh_50",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_226"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 226,
+        "track_key": "clip2.mp4_226",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   },
   {
-    "feed_a": "clip1.mp4",
-    "track_a": 125,
-    "class_a": "motorcycle",
-    "feed_b": "clip2.mp4",
-    "track_b": 15,
-    "class_b": "car",
-    "similarity": 0.600722
+    "global_id": "global_veh_51",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_228"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 228,
+        "track_key": "clip2.mp4_228",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_52",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_234"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 234,
+        "track_key": "clip2.mp4_234",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_53",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_240"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 240,
+        "track_key": "clip2.mp4_240",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_54",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_244"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 244,
+        "track_key": "clip2.mp4_244",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_55",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_252"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 252,
+        "track_key": "clip2.mp4_252",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_56",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_260"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 260,
+        "track_key": "clip2.mp4_260",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_57",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_264"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 264,
+        "track_key": "clip2.mp4_264",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_58",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip2.mp4_276"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 276,
+        "track_key": "clip2.mp4_276",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_59",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip2.mp4_3"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 3,
+        "track_key": "clip2.mp4_3",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_60",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_31"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 31,
+        "track_key": "clip2.mp4_31",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_61",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_34"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 34,
+        "track_key": "clip2.mp4_34",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_62",
+    "class_label": "truck",
+    "tracks": [
+      "clip2.mp4_4"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 4,
+        "track_key": "clip2.mp4_4",
+        "class_label": "truck"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_63",
+    "class_label": "truck",
+    "tracks": [
+      "clip2.mp4_40"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 40,
+        "track_key": "clip2.mp4_40",
+        "class_label": "truck"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_64",
+    "class_label": "truck",
+    "tracks": [
+      "clip2.mp4_48"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 48,
+        "track_key": "clip2.mp4_48",
+        "class_label": "truck"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_65",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_49"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 49,
+        "track_key": "clip2.mp4_49",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_66",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_5"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 5,
+        "track_key": "clip2.mp4_5",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_67",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_61"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 61,
+        "track_key": "clip2.mp4_61",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_68",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_65"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 65,
+        "track_key": "clip2.mp4_65",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_69",
+    "class_label": "truck",
+    "tracks": [
+      "clip2.mp4_69"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 69,
+        "track_key": "clip2.mp4_69",
+        "class_label": "truck"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_70",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_73"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 73,
+        "track_key": "clip2.mp4_73",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_71",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_77"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 77,
+        "track_key": "clip2.mp4_77",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_72",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip2.mp4_8"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 8,
+        "track_key": "clip2.mp4_8",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_73",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_88"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 88,
+        "track_key": "clip2.mp4_88",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_74",
+    "class_label": "motorcycle",
+    "tracks": [
+      "clip2.mp4_9"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 9,
+        "track_key": "clip2.mp4_9",
+        "class_label": "motorcycle"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
+  },
+  {
+    "global_id": "global_veh_75",
+    "class_label": "car",
+    "tracks": [
+      "clip2.mp4_90"
+    ],
+    "track_details": [
+      {
+        "feed": "clip2.mp4",
+        "track_id": 90,
+        "track_key": "clip2.mp4_90",
+        "class_label": "car"
+      }
+    ],
+    "camera_ids": [
+      "clip2.mp4"
+    ],
+    "num_tracks": 1,
+    "matches": []
   }
 ]

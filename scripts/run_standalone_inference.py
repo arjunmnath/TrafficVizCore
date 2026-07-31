@@ -230,7 +230,12 @@ def run_agentic_inference(args, vector_store: VectorStore) -> List[Dict[str, Any
     frame_extractor = FrameExtractor(video_sources={})
 
     console.print(f"[bold cyan]Loading Agentic VLM Reasoner:[/bold cyan] {args.reasoning_model}")
-    reasoner = get_vqa_reasoner(model_name=args.reasoning_model, device=args.device)
+    try:
+        reasoner = get_vqa_reasoner(model_name=args.reasoning_model, device=args.device)
+    except RuntimeError as err:
+        console.print(f"[bold yellow]Warning loading reasoning model ({err}). Falling back to Autonomous Perception Reasoner.[/bold yellow]")
+        from vlm_retrieval.vqa.gemini_reasoner import GeminiAgenticReasoner
+        reasoner = GeminiAgenticReasoner(model_name=args.reasoning_model)
 
     pipeline = AgenticPlannerPipeline(
         retrieval_engine=retrieval_engine,

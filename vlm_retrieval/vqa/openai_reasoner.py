@@ -1,11 +1,20 @@
-"""OpenAI Agentic VLM Reasoner (supporting openai-5.6, gpt-4o, gpt-4.5)."""
+"""OpenAI Agentic VLM Reasoner — ReAct-style execution loop.
+
+Uses OpenAI's native tool_calls protocol. When inspect_visual_candidate
+returns images, they are encoded as base64 image content in tool response
+messages so the VLM can actually see the crops.
+"""
 
 from __future__ import annotations
 
+import base64
+import io
 import json
 import os
 import urllib.request
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+
+from PIL import Image
 
 if TYPE_CHECKING:
     from vlm_retrieval.tools import InferenceToolRegistry
@@ -15,13 +24,13 @@ from shared.utils import setup_logger
 
 
 class OpenAIAgenticReasoner(BaseAgenticVLMReasoner):
-    """API-based VLM Reasoner using OpenAI 5.6 / GPT-4o with tool calling and vision capabilities."""
+    """API-based VLM Reasoner using OpenAI with tool calling and vision."""
 
     def __init__(self, model_name: str = "openai-5.6", api_key: Optional[str] = None) -> None:
         self.logger = setup_logger("OpenAIAgenticReasoner")
         self.model_name = model_name
         self.api_key = api_key or os.getenv("OPENAI_API_KEY", "")
-        # Standardize model string for API payload
+
         if "openai-5.6" in model_name.lower():
             self.api_model = "gpt-4o"
         elif "gpt-4" in model_name.lower():
@@ -37,20 +46,18 @@ class OpenAIAgenticReasoner(BaseAgenticVLMReasoner):
         camera_id_filter: Optional[str] = None,
     ) -> Tuple[List[AgenticPlanStep], List[RankedResult]]:
         self.logger.info(
-            f"Starting agentic planning with OpenAI model '{self.api_model}' for query: '{query}'"
+            f"Starting ReAct loop with OpenAI model '{self.api_model}' for query: '{query}'"
         )
 
-        if self.api_key:
-            return self._run_api_planning_loop(query, tools, max_steps, camera_id_filter)
-        else:
-            self.logger.warning(
-                "OPENAI_API_KEY not found in environment. Running autonomous perception tool execution loop."
-            )
-            return self._run_fallback_planning_loop(
-                query, tools, max_steps, camera_id_filter, model_label="OpenAI 5.6"
+        if not self.api_key:
+            raise RuntimeError(
+                "OPENAI_API_KEY not found in environment. "
+                "Cannot run agentic planning without an LLM."
             )
 
-    def _run_api_planning_loop(
+        return self._run_react_loop(query, tools, max_steps, camera_id_filter)
+
+    def _run_react_loop(
         self,
         query: str,
         tools: InferenceToolRegistry,
@@ -61,7 +68,8 @@ class OpenAIAgenticReasoner(BaseAgenticVLMReasoner):
         user_message = self._build_user_message(query, camera_id_filter)
 
         tool_decls = [
-            {"type": "function", "function": tool} for tool in tools.get_tool_declarations()
+            {"type": "function", "function": tool}
+            for tool in tools.get_tool_declarations()
         ]
 
         messages: List[Dict[str, Any]] = [
@@ -94,45 +102,79 @@ class OpenAIAgenticReasoner(BaseAgenticVLMReasoner):
                 with urllib.request.urlopen(req) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
             except Exception as err:
-                self.logger.error(f"OpenAI API call failed: {err}")
-                return self._run_fallback_planning_loop(
-                    query, tools, max_steps, camera_id_filter, model_label="OpenAI 5.6"
-                )
+                self.logger.error(f"OpenAI API call failed at step {step_idx}: {err}")
+                raise RuntimeError(f"OpenAI API call failed: {err}") from err
 
             choice = data["choices"][0]["message"]
-            thought = choice.get("content") or "Executing perception tool steps..."
+            thought = choice.get("content") or ""
             tool_calls_raw = choice.get("tool_calls", [])
 
-            step = AgenticPlanStep(step_number=step_idx, thought=thought)
+            step = AgenticPlanStep(
+                step_number=step_idx,
+                thought=thought or f"Step {step_idx}: processing...",
+            )
 
+            # If no tool calls → this is the final answer
             if not tool_calls_raw:
                 trajectory.append(step)
+                self.logger.info(f"[Step {step_idx}] Final answer (no tool calls)")
                 break
 
+            # Append assistant message (with tool_calls) to conversation
             messages.append(choice)
 
+            # Execute each tool call
             for call in tool_calls_raw:
                 call_id = call["id"]
                 name = call["function"]["name"]
                 args = json.loads(call["function"]["arguments"])
 
-                step.tool_calls.append(ToolCallSpec(call_id=call_id, name=name, arguments=args))
+                step.tool_calls.append(
+                    ToolCallSpec(call_id=call_id, name=name, arguments=args)
+                )
                 tool_res = tools.execute_tool(call_id, name, args)
                 step.tool_results.append(tool_res)
 
-                # Format response for message history
-                content_str = json.dumps(tool_res.content)
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "content": content_str,
-                    }
-                )
+                # Build tool response message
+                content_parts: List[Dict[str, Any]] = []
+
+                # Text content with structured tool output
+                content_text = json.dumps(tool_res.content) if isinstance(
+                    tool_res.content, (dict, list)
+                ) else str(tool_res.content)
+                content_parts.append({"type": "text", "text": content_text})
+
+                # Encode extracted images as base64 for vision
+                for img in tool_res.extracted_images:
+                    try:
+                        buf = io.BytesIO()
+                        img_copy = img.copy()
+                        img_copy.thumbnail((512, 512))
+                        img_copy.save(buf, format="JPEG", quality=85)
+                        b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+                        content_parts.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{b64}",
+                            },
+                        })
+                    except Exception as img_err:
+                        self.logger.warning(f"Failed to encode image for OpenAI: {img_err}")
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": content_parts if len(content_parts) > 1 else content_text,
+                })
 
             trajectory.append(step)
+            self.logger.info(
+                f"[Step {step_idx}] Executed {len(tool_calls_raw)} tool call(s): "
+                f"{[c['function']['name'] for c in tool_calls_raw]}"
+            )
 
-        return trajectory, self._synthesize_ranked_results(
-            trajectory, tools, model_label="OpenAI 5.6"
-        )
+        # Parse final answer from the last thought
+        final_text = trajectory[-1].thought if trajectory else ""
+        ranked_results = self._parse_final_answer(final_text, tools)
 
+        return trajectory, ranked_results

@@ -2,7 +2,6 @@
 
 from vlm_retrieval.vqa.types import (
     AgenticPlanStep,
-    CandidateImage,
     RankedResult,
     ToolCallSpec,
     ToolResult,
@@ -19,7 +18,6 @@ __all__ = [
     "OpenAIAgenticReasoner",
     "GeminiAgenticReasoner",
     "Qwen3VLAgenticReasoner",
-    "CandidateImage",
     "RankedResult",
     "ToolCallSpec",
     "ToolResult",

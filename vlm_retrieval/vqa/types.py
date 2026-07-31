@@ -9,19 +9,6 @@ from PIL import Image
 
 
 @dataclass
-class CandidateImage:
-    """A retrieved candidate frame or crop passed to visual inspection tools."""
-
-    camera_id: str
-    camera_timestamp: float
-    video_pos_ms: float
-    track_id: int
-    bbox: Optional[List[float]] = None
-    frame: Optional[Image.Image] = None
-    retrieval_distance: float = 1.0
-
-
-@dataclass
 class ToolCallSpec:
     """Specification of a tool call emitted by an agentic VLM planner."""
 

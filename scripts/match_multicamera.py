@@ -27,6 +27,7 @@ from itertools import product
 from typing import Dict, List, NamedTuple, Any
 
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -52,6 +53,16 @@ class MatchResult(NamedTuple):
     similarity: float
 
 
+class GlobalIdentityCluster(NamedTuple):
+    global_id: str
+    class_label: str
+    tracks: List[str]  # e.g. ["clip1.mp4_5", "clip2.mp4_128"]
+    track_details: List[Dict[str, Any]]
+    camera_ids: List[str]
+    num_tracks: int
+    matches: List[Dict[str, Any]]
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Embedding helpers
 # ──────────────────────────────────────────────────────────────────────────────
@@ -63,15 +74,7 @@ def l2_normalize(v: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
 
 
 def aggregate_embeddings(occ_embeddings: np.ndarray[Any, Any], mode: str) -> np.ndarray[Any, Any]:
-    """Reduce a (N, D) matrix of embeddings to a single prototype vector.
-
-    Args:
-        occ_embeddings: Shape (N, D).
-        mode: One of 'mean' | 'max_pooling' | 'last'.
-
-    Returns:
-        Shape (D,) normalized prototype vector.
-    """
+    """Reduce a (N, D) matrix of embeddings to a single prototype vector."""
     if mode == "mean":
         proto = occ_embeddings.mean(axis=0)
     elif mode == "max_pooling":
@@ -99,18 +102,7 @@ def load_tracks(
     embedding_type: str,
     class_filter: List[str],
 ) -> Dict[str, List[TrackEntry]]:
-    """Load track entries from JSON + NPZ, grouped by feed name.
-
-    Args:
-        json_path: Path to the registry JSON export.
-        npz_path: Path to the NPZ embeddings file.
-        aggregation: Embedding aggregation mode ('mean', 'max_pooling', 'last').
-        embedding_type: Primary embedding key prefix preference ('app', 'occ', or 'smooth').
-        class_filter: If non-empty, only keep tracks whose class_label is in this list.
-
-    Returns:
-        Dict mapping feed_name -> list of TrackEntry.
-    """
+    """Load track entries from JSON + NPZ, grouped by feed name."""
     with open(json_path) as f:
         registry: Dict[str, List[Dict[str, Any]]] = json.load(f)
 
@@ -130,7 +122,6 @@ def load_tracks(
             if class_filter and class_label not in class_filter:
                 continue
 
-            # Candidate NPZ key formats to support run_reid_pipeline.py output
             candidate_keys = [
                 f"{feed_name}_{embedding_type}_{track_id}",
                 f"{feed_name}_app_{track_id}",
@@ -154,7 +145,7 @@ def load_tracks(
                 )
                 continue
 
-            embeddings = npz[npz_key].astype(np.float32)  # (N, D)
+            embeddings = npz[npz_key].astype(np.float32)
             if embeddings.size == 0:
                 print(
                     f"  [warn] Empty embeddings array for key '{npz_key}' — skipping.",
@@ -185,50 +176,153 @@ def load_tracks(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Matching
+# Matching & N-Track Aggregation
 # ──────────────────────────────────────────────────────────────────────────────
 
 
 def match_cross_camera(
     feed_tracks: Dict[str, List[TrackEntry]],
     threshold: float,
-    same_class_only: bool,
+    same_class_only: bool = True,
 ) -> List[MatchResult]:
-    """Compute pairwise cosine similarity between all tracks from different feeds.
-
-    Args:
-        feed_tracks: Grouped tracks per feed.
-        threshold: Minimum similarity to include in results.
-        same_class_only: If True, only compare tracks with the same class label.
-
-    Returns:
-        List of MatchResult, sorted by similarity descending.
-    """
+    """Compute 1-to-1 bipartite optimal cosine similarity matching between tracks across feeds."""
     feeds = list(feed_tracks.keys())
     results: List[MatchResult] = []
 
     for i in range(len(feeds)):
         for j in range(i + 1, len(feeds)):
             feed_a, feed_b = feeds[i], feeds[j]
-            for ta, tb in product(feed_tracks[feed_a], feed_tracks[feed_b]):
-                if same_class_only and ta.class_label != tb.class_label:
+            tracks_a = feed_tracks[feed_a]
+            tracks_b = feed_tracks[feed_b]
+
+            classes_a = set(t.class_label for t in tracks_a)
+            classes_b = set(t.class_label for t in tracks_b)
+            common_classes = classes_a & classes_b if same_class_only else (classes_a | classes_b)
+
+            for cls_lbl in sorted(list(common_classes)):
+                cls_tracks_a = [t for t in tracks_a if not same_class_only or t.class_label == cls_lbl]
+                cls_tracks_b = [t for t in tracks_b if not same_class_only or t.class_label == cls_lbl]
+
+                if not cls_tracks_a or not cls_tracks_b:
                     continue
-                sim = cosine_similarity(ta.embedding, tb.embedding)
-                if sim >= threshold:
-                    results.append(
-                        MatchResult(
-                            feed_a=feed_a,
-                            track_a=ta.track_id,
-                            class_a=ta.class_label,
-                            feed_b=feed_b,
-                            track_b=tb.track_id,
-                            class_b=tb.class_label,
-                            similarity=sim,
+
+                sim_matrix = np.zeros((len(cls_tracks_a), len(cls_tracks_b)), dtype=np.float32)
+                for r_idx, ta in enumerate(cls_tracks_a):
+                    for c_idx, tb in enumerate(cls_tracks_b):
+                        sim_matrix[r_idx, c_idx] = cosine_similarity(ta.embedding, tb.embedding)
+
+                cost_matrix = 1.0 - sim_matrix
+                row_ind, col_ind = linear_sum_assignment(cost_matrix)
+
+                for r_idx, c_idx in zip(row_ind, col_ind):
+                    sim = float(sim_matrix[r_idx, c_idx])
+                    if sim >= threshold:
+                        ta = cls_tracks_a[r_idx]
+                        tb = cls_tracks_b[c_idx]
+                        results.append(
+                            MatchResult(
+                                feed_a=feed_a,
+                                track_a=ta.track_id,
+                                class_a=ta.class_label,
+                                feed_b=feed_b,
+                                track_b=tb.track_id,
+                                class_b=tb.class_label,
+                                similarity=sim,
+                            )
                         )
-                    )
 
     results.sort(key=lambda r: r.similarity, reverse=True)
     return results
+
+
+def cluster_tracks_into_identities(
+    feed_tracks: Dict[str, List[TrackEntry]],
+    match_results: List[MatchResult],
+) -> List[GlobalIdentityCluster]:
+    """Aggregate N matching tracks into single global identity clusters via Union-Find (DSU)."""
+    parent: Dict[str, str] = {}
+    track_info: Dict[str, Dict[str, Any]] = {}
+
+    for feed, tracks in feed_tracks.items():
+        for t in tracks:
+            key = f"{feed}_{t.track_id}"
+            parent[key] = key
+            track_info[key] = {
+                "feed": feed,
+                "track_id": t.track_id,
+                "track_key": key,
+                "class_label": t.class_label,
+            }
+
+    def find(i: str) -> str:
+        if parent[i] == i:
+            return i
+        parent[i] = find(parent[i])
+        return parent[i]
+
+    def union(i: str, j: str) -> None:
+        root_i, root_j = find(i), find(j)
+        if root_i != root_j:
+            parent[root_i] = root_j
+
+    for r in match_results:
+        key_a = f"{r.feed_a}_{r.track_a}"
+        key_b = f"{r.feed_b}_{r.track_b}"
+        union(key_a, key_b)
+
+    clusters: Dict[str, List[str]] = {}
+    for key in parent:
+        root = find(key)
+        if root not in clusters:
+            clusters[root] = []
+        clusters[root].append(key)
+
+    pairwise_per_cluster: Dict[str, List[MatchResult]] = {}
+    for r in match_results:
+        key_a = f"{r.feed_a}_{r.track_a}"
+        root = find(key_a)
+        if root not in pairwise_per_cluster:
+            pairwise_per_cluster[root] = []
+        pairwise_per_cluster[root].append(r)
+
+    sorted_roots = sorted(clusters.keys(), key=lambda r: (-len(clusters[r]), r))
+    identity_clusters: List[GlobalIdentityCluster] = []
+
+    for idx, root in enumerate(sorted_roots):
+        members = sorted(clusters[root])
+        member_details = [track_info[m] for m in members]
+        cams = sorted(list(set(track_info[m]["feed"] for m in members)))
+
+        classes = [track_info[m]["class_label"] for m in members]
+        class_label = max(set(classes), key=classes.count) if classes else "object"
+
+        matches_list = [
+            {
+                "feed_a": r.feed_a,
+                "track_a": r.track_a,
+                "class_a": r.class_a,
+                "feed_b": r.feed_b,
+                "track_b": r.track_b,
+                "class_b": r.class_b,
+                "similarity": round(r.similarity, 6),
+            }
+            for r in pairwise_per_cluster.get(root, [])
+        ]
+
+        gid = f"global_veh_{idx + 1}"
+        identity_clusters.append(
+            GlobalIdentityCluster(
+                global_id=gid,
+                class_label=class_label,
+                tracks=members,
+                track_details=member_details,
+                camera_ids=cams,
+                num_tracks=len(members),
+                matches=matches_list,
+            )
+        )
+
+    return identity_clusters
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -236,7 +330,11 @@ def match_cross_camera(
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def print_results(results: List[MatchResult], top_k: int) -> None:
+def print_results(
+    results: List[MatchResult],
+    clusters: List[GlobalIdentityCluster],
+    top_k: int,
+) -> None:
     shown = results[:top_k] if top_k > 0 else results
     if not shown:
         print("No matches found above the similarity threshold.")
@@ -248,7 +346,7 @@ def print_results(results: List[MatchResult], top_k: int) -> None:
         f"{'Feed B':<{col_w}} {'Track B':>8}  {'Class B':<12}  {'Similarity':>10}"
     )
     sep = "─" * len(header)
-    print(f"\n{'Cross-Camera ReID Match Results':^{len(header)}}")
+    print(f"\n{'Cross-Camera ReID Pairwise Matches':^{len(header)}}")
     print(sep)
     print(header)
     print(sep)
@@ -258,21 +356,32 @@ def print_results(results: List[MatchResult], top_k: int) -> None:
             f"{r.feed_b:<{col_w}} {r.track_b:>8}  {r.class_b:<12}  {r.similarity:>10.4f}"
         )
     print(sep)
-    print(f"  Total matches: {len(results)}  (showing top {len(shown)})\n")
+    print(f"  Total pairwise matches: {len(results)}  (showing top {len(shown)})\n")
+
+    multi_track_clusters = [c for c in clusters if c.num_tracks > 1]
+    print(f"{'Aggregated Multi-Track Global Identities (' + str(len(multi_track_clusters)) + ' identities)':^70}")
+    print("─" * 70)
+    print(f"{'Global ID':<16} {'Class':<12} {'Tracks (N)':<12} {'Feeds':<16} {'Member Tracks'}")
+    print("─" * 70)
+    for c in multi_track_clusters[:15]:
+        trks_str = ", ".join(c.tracks[:4]) + ("..." if len(c.tracks) > 4 else "")
+        feeds_str = ", ".join(c.camera_ids)
+        print(f"{c.global_id:<16} {c.class_label:<12} {c.num_tracks:<12} {feeds_str:<16} {trks_str}")
+    print("─" * 70 + "\n")
 
 
-def save_results(results: List[MatchResult], output_path: str) -> None:
+def save_results(clusters: List[GlobalIdentityCluster], output_path: str) -> None:
     data = [
         {
-            "feed_a": r.feed_a,
-            "track_a": r.track_a,
-            "class_a": r.class_a,
-            "feed_b": r.feed_b,
-            "track_b": r.track_b,
-            "class_b": r.class_b,
-            "similarity": round(r.similarity, 6),
+            "global_id": c.global_id,
+            "class_label": c.class_label,
+            "tracks": c.tracks,
+            "track_details": c.track_details,
+            "camera_ids": c.camera_ids,
+            "num_tracks": c.num_tracks,
+            "matches": c.matches,
         }
-        for r in results
+        for c in clusters
     ]
     with open(output_path, "w") as f:
         json.dump(data, f, indent=2)
@@ -341,7 +450,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--same-class-only",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="Only compare tracks with the same class label across cameras",
     )
     parser.add_argument(
@@ -380,13 +490,14 @@ def main() -> None:
         print(f"  {feed}: {len(tracks)} tracks")
     print(f"  Total: {total_tracks} tracks across {len(feed_tracks)} feeds\n")
 
-    print("Computing cross-camera similarities...")
+    print("Computing cross-camera similarities and aggregating identities...")
     results = match_cross_camera(feed_tracks, args.threshold, args.same_class_only)
+    clusters = cluster_tracks_into_identities(feed_tracks, results)
 
-    print_results(results, args.top_k)
+    print_results(results, clusters, args.top_k)
 
     if args.output:
-        save_results(results, args.output)
+        save_results(clusters, args.output)
 
 
 if __name__ == "__main__":
