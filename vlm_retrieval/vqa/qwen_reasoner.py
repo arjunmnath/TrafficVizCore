@@ -53,18 +53,26 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
             Qwen3VLForConditionalGeneration,
         )
 
-        dtype = torch.bfloat16 if self.device.startswith("cuda") else torch.float32
+        target_dtype = torch.bfloat16 if self.device.startswith("cuda") else torch.float32
         self.processor = AutoProcessor.from_pretrained(
             self.model_name, trust_remote_code=True
         )
         resolved_device_map = self.device_map or "balanced"
 
+        load_kwargs = {
+            "torch_dtype": target_dtype,
+            "device_map": resolved_device_map,
+            "trust_remote_code": True,
+            "low_cpu_mem_usage": True,
+        }
+        self.logger.info(
+            f"Loading with device_map='{resolved_device_map}', "
+            f"torch_dtype={target_dtype}, low_cpu_mem_usage=True"
+        )
+
         try:
             self.model = AutoModelForImageTextToText.from_pretrained(
-                self.model_name,
-                dtype=dtype,
-                device_map=resolved_device_map,
-                trust_remote_code=True,
+                self.model_name, **load_kwargs,
             )
         except Exception as inner_err:
             self.logger.debug(
@@ -72,10 +80,7 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
                 "trying Qwen3VLForConditionalGeneration"
             )
             self.model = Qwen3VLForConditionalGeneration.from_pretrained(
-                self.model_name,
-                dtype=dtype,
-                device_map=resolved_device_map,
-                trust_remote_code=True,
+                self.model_name, **load_kwargs,
             )
         self.model.eval()
         self.logger.info(f"Successfully loaded '{self.model_name}'")
