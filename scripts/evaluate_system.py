@@ -140,6 +140,14 @@ def parse_args() -> argparse.Namespace:
         help="Output text report file path (default: artifacts/eval_results.txt)",
     )
     parser.add_argument(
+        "--reid_model_type",
+        "--reid-model-type",
+        type=str,
+        default="resnetibnreid",
+        choices=["resnetibnreid", "vitclipreid"],
+        help="ReID feature extractor model variant ('resnetibnreid' or 'vitclipreid')",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable detailed frame progress logging",
@@ -241,7 +249,11 @@ def run_pipeline_experiment(
 
     postprocessing_pipeline = PostProcessingPipeline(postprocessing_stages)
 
-    feature_stage = FeatureStage(device=args.device, fp16=True)
+    feature_stage = FeatureStage(
+        model_type=args.reid_model_type,
+        device=args.device,
+        fp16=True,
+    )
     stages = [
         VideoFeederStage(),
         SamplerStage(sample_fps=args.sample_fps, time_based=False),

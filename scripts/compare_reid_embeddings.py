@@ -150,26 +150,17 @@ def main() -> None:
         action="store_true",
         help="Show the interactive plot window before saving.",
     )
-    # Deprecated legacy flags — still accepted for compatibility
-    parser.add_argument("--id1", type=str, help=argparse.SUPPRESS)
-    parser.add_argument("--id2", type=str, help=argparse.SUPPRESS)
     args = parser.parse_args()
 
     # Determine target track keys
-    target_ids = []
-    if args.ids:
-        target_ids = [str(x) for x in args.ids]
-    else:
-        if args.id1:
-            target_ids.append(str(args.id1))
-        if args.id2:
-            target_ids.append(str(args.id2))
+    target_ids = [str(x) for x in args.ids] if args.ids else []
 
     if not target_ids:
         console.print(
             "[bold red]Error: No track keys specified. Use --ids feed:track_id ...[/bold red]"
         )
         sys.exit(1)
+
 
     # Resolve JSON path
     json_path = Path(args.json_path)
@@ -378,7 +369,7 @@ def main() -> None:
                 weight="bold",
             )
 
-    # For K == 2, we can also label the Inter block for backward compatibility/clarity
+    # For K == 2, we can also label the Inter block for clarity
     if len(target_ids) == 2:
         gid1, gid2 = target_ids[0], target_ids[1]
         start1, end1 = id_indices[gid1]

@@ -87,11 +87,8 @@ def run_vlm_retrieval(config: VLMRetrievalConfig, query_text: str | None = None)
                 break
 
 
-# Backwards compatibility alias
-run_vlm_retrieval = run_vlm_retrieval
-
-
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser(description="CCTV Agentic Planning VLM Retrieval Engine")
     parser.add_argument("--query", type=str, default=None, help="Natural language query to execute.")
     parser.add_argument("--npz_dir", type=str, default=None, help="Directory containing .npz embedding files.")
@@ -106,7 +103,7 @@ if __name__ == "__main__":
         "--reasoning_model",
         type=str,
         default="Qwen/Qwen3-VL-8B-Instruct",
-        help="Options: 'Qwen/Qwen3-VL-8B-Instruct', 'openai-5.6', 'gemini-2.5-flash'",
+        help="Options: 'Qwen/Qwen3-VL-8B-Instruct', 'openai-5.6', 'gemini-3.5-flash'",
     )
     parser.add_argument("--retrieval_top_k", type=int, default=20)
     parser.add_argument("--max_planning_steps", type=int, default=5)

@@ -9,7 +9,7 @@ class VLMRetrievalConfig(BaseModel):
 
     retrieval_model: str = "google/siglip2-so400m-patch14-384"
     reasoning_model: str = (
-        "Qwen/Qwen3-VL-8B-Instruct"  # Options: 'Qwen/Qwen3-VL-8B-Instruct', 'openai-5.6', 'gemini-2.5-flash'
+        "Qwen/Qwen3-VL-8B-Instruct"  # Options: 'Qwen/Qwen3-VL-8B-Instruct', 'openai-5.6', 'gemini-3.5-flash'
     )
 
     video_sources: Dict[str, str] = {}  # camera_id -> video file path
@@ -20,7 +20,3 @@ class VLMRetrievalConfig(BaseModel):
 
     device: str = "auto"  # "auto", "cuda", "mps", "cpu"
     device_map: str = "balanced"  # "balanced", "auto", "sequential"
-
-
-# Backwards compatibility alias
-InferenceConfig = VLMRetrievalConfig

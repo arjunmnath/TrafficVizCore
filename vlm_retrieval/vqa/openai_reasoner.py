@@ -173,6 +173,50 @@ class OpenAIAgenticReasoner(BaseAgenticVLMReasoner):
                 f"{[c['function']['name'] for c in tool_calls_raw]}"
             )
 
+        # If the loop exhausted max_steps and the last step still had tool
+        # calls (meaning the model never emitted a voluntary final answer),
+        # make one extra API call with tools disabled to force a summary.
+        last_step_had_tools = trajectory and trajectory[-1].tool_calls
+        if last_step_had_tools:
+            self.logger.info(
+                "ReAct loop exhausted max_steps without a final answer. "
+                "Making one extra call to force a summary."
+            )
+            # Append a forcing prompt
+            messages.append({
+                "role": "user",
+                "content": self._build_final_answer_prompt(),
+            })
+
+            # Call OpenAI WITHOUT tools so it cannot emit more tool calls
+            force_payload = {
+                "model": self.api_model,
+                "messages": messages,
+                "temperature": 0.2,
+            }
+            force_req = urllib.request.Request(
+                "https://api.openai.com/v1/chat/completions",
+                data=json.dumps(force_payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.api_key}",
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(force_req) as resp:
+                    force_data = json.loads(resp.read().decode("utf-8"))
+                forced_text = force_data["choices"][0]["message"].get("content", "")
+                if forced_text.strip():
+                    forced_step = AgenticPlanStep(
+                        step_number=len(trajectory) + 1,
+                        thought=forced_text.strip(),
+                    )
+                    trajectory.append(forced_step)
+                    self.logger.info("Received forced final answer from OpenAI.")
+            except Exception as err:
+                self.logger.warning(f"Failed to get forced final answer from OpenAI: {err}")
+
         # Parse final answer from the last thought
         final_text = trajectory[-1].thought if trajectory else ""
         ranked_results = self._parse_final_answer(final_text, tools)

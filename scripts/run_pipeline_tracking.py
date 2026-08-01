@@ -143,6 +143,14 @@ def parse_args() -> argparse.Namespace:
         help="Enable FP16 half-precision inference for ensemble.",
     )
     parser.add_argument(
+        "--reid_model_type",
+        "--reid-model-type",
+        type=str,
+        default="resnetibnreid",
+        choices=["resnetibnreid", "vitclipreid"],
+        help="ReID feature extractor model variant ('resnetibnreid' or 'vitclipreid')",
+    )
+    parser.add_argument(
         "--no_fp16",
         action="store_false",
         dest="fp16",
@@ -174,6 +182,7 @@ def main() -> None:
     feature_stage = None
     if args.fuse_appearance:
         feature_stage = FeatureStage(
+            model_type=args.reid_model_type,
             device=args.device,
             fp16=args.fp16,
         )

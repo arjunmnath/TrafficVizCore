@@ -23,6 +23,8 @@ class RetrievalResult:
     bbox: Optional[str]
     video_path: Optional[str]
     distance: float
+    crop_path: Optional[str] = None
+    raw_track_id: Optional[str] = None
 
 
 class RetrievalEngine:
@@ -98,6 +100,9 @@ class RetrievalEngine:
             match = re.search(r"(\d+)$", str(raw_tid))
             parsed_tid = int(match.group(1)) if match else 0
 
+        crop_p = meta.get("crop_path")
+        raw_tid_str = str(raw_tid) if raw_tid != 0 else str(meta.get("global_id", item["id"]))
+
         return RetrievalResult(
             id=item["id"],
             camera_id=str(meta.get("camera_id", "")),
@@ -107,4 +112,7 @@ class RetrievalEngine:
             bbox=meta.get("bbox"),
             video_path=meta.get("video_path"),
             distance=float(item.get("distance", 1.0)),
+            crop_path=crop_p,
+            raw_track_id=raw_tid_str,
         )
+

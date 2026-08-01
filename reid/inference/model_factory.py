@@ -2,6 +2,7 @@ import os
 import sys
 import types
 import collections.abc
+from typing import Optional, Any
 
 from .utils import get_device
 
@@ -50,3 +51,41 @@ def build_ensemble_model(config: EnsembleConfig) -> torch.nn.Module:
 
     model = EnsembleModel(config)
     return model
+
+
+def build_reid_model(
+    variant: str = "resnetibnreid",
+    device: str = "cuda",
+    fp16: bool = True,
+    model_path: Optional[str] = None,
+    **kwargs: Any,
+):
+    """Factory function creating a ReID feature extractor adapter instance.
+
+    Supported variants:
+        - 'resnetibnreid' (or 'resnet_ibn', 'ensemble'): 3-model PyTorch ResNet-IBN ensemble.
+        - 'vitclipreid' (or 'vit_clip', 'onnx'): ONNX Runtime-based ViT-CLIP model.
+
+    Args:
+        variant (str): ReID model variant name.
+        device (str): Inference device ('cuda', 'cpu', 'auto').
+        fp16 (bool): Half precision enable flag (for PyTorch models).
+        model_path (Optional[str]): Custom path to model weights/ONNX file.
+
+    Returns:
+        BaseReIDExtractor: Initialized ReID model adapter.
+    """
+    from reid.inference.base import BaseReIDExtractor
+    from reid.inference.resnet_ibn import ResNetIBNReID
+    from reid.inference.vit_clip import ViTCLIPReID
+
+    normalized = variant.lower().strip()
+
+    if normalized in ("resnetibnreid", "resnet_ibn", "ensemble"):
+        return ResNetIBNReID(device=device, fp16=fp16)
+    elif normalized in ("vitclipreid", "vit_clip", "onnx"):
+        return ViTCLIPReID(device=device, model_path=model_path, **kwargs)
+    else:
+        raise ValueError(
+            f"Unknown ReID variant: '{variant}'. Supported variants are: 'resnetibnreid', 'vitclipreid'."
+        )

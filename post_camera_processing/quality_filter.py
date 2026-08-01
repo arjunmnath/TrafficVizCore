@@ -2,7 +2,7 @@
 
 Applies hard filtering (area, aspect ratio, border truncation, severe blur) and soft weighted
 quality scoring (sharpness, area, contrast, detection confidence, border margin) to retain
-only informative, high-resolution, un-blurred crops for SigLIP2 semantic embedding.
+only informative, high-resolution, un-blurred crops for semantic retrieval embedding.
 """
 
 from __future__ import annotations

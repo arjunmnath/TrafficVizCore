@@ -1,43 +1,53 @@
-import os
 import torch
 import numpy as np
-from typing import Union, List, Any
-from .config import InferenceConfig, EnsembleConfig
-from .model_factory import build_model_from_config, build_ensemble_model
-from .preprocessing import preprocess_images
-from .ensemble import fuse_embeddings
-from .utils import get_device
+from typing import List, Any, Optional
+
+from reid.inference.base import BaseReIDExtractor
+from reid.inference.config import EnsembleConfig
+from reid.inference.model_factory import build_ensemble_model
+from reid.inference.preprocessing import preprocess_images
+from reid.inference.utils import get_device
 
 
-class EnsembleReID:
-    """Production-grade inference pipeline supporting 3 ensembled models with mean centroid fusion."""
+class ResNetIBNReID(BaseReIDExtractor):
+    """Production-grade ReID feature extractor using 3 ensembled ResNet-IBN/ResNeXt-IBN models with mean centroid fusion."""
 
     def __init__(
         self,
         device: str = "cuda",
         fp16: bool = True,
+        checkpoint_paths: Optional[List[str]] = None,
     ):
-        self.device = device if device != "auto" else get_device(device)
+        self._device_str = device if device != "auto" else get_device(device)
         self.fp16 = fp16
 
         from reid.utils import resolve_model_weights
 
-        # Config containing the 3 ensembled submodels
-        self.config = EnsembleConfig(
-            checkpoint_paths=[
+        if checkpoint_paths is None:
+            checkpoint_paths = [
                 resolve_model_weights("resnet101_ibn_a_2.pth"),
                 resolve_model_weights("resnet101_ibn_a_3.pth"),
                 resolve_model_weights("resnext101_ibn_a_2.pth"),
-            ],
-            device=self.device,
+            ]
+
+        # Config containing the 3 ensembled submodels
+        self.config = EnsembleConfig(
+            checkpoint_paths=checkpoint_paths,
+            device=self._device_str,
             fp16=self.fp16,
         )
 
         # Build unified ensemble model
         self.model = build_ensemble_model(self.config)
+        self._submodels = self.model.submodels
 
-        # Keep self.models as a list for compatibility (e.g. len(self.ensemble.models))
-        self.models = self.model.submodels
+    @property
+    def device(self) -> str:
+        return self._device_str
+
+    @property
+    def models(self) -> List[Any]:
+        return self._submodels
 
     def extract(self, image: Any, is_bgr: bool = True) -> torch.Tensor:
         """Extract embeddings for a single image."""
@@ -58,11 +68,10 @@ class EnsembleReID:
             is_bgr=is_bgr,
         )
 
-        device = torch.device(self.device)
-        tensor_batch = tensor_batch.to(device)
-        is_cuda = device.type == "cuda"
+        device_obj = torch.device(self._device_str)
+        tensor_batch = tensor_batch.to(device_obj)
+        is_cuda = device_obj.type == "cuda"
 
-        # Batch extraction loop (split tensor_batch by config.batch_size)
         num_samples = tensor_batch.shape[0]
         batch_size = self.config.batch_size
         feats_list = []
@@ -80,6 +89,5 @@ class EnsembleReID:
 
                 feats_list.append(sub_feats)
 
-        # Concatenate all batch features
         fused_features = torch.cat(feats_list, dim=0)
         return fused_features

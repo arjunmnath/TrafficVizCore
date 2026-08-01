@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional
+from typing import List, Optional, Union
 
 
 class Attributes(BaseModel):
@@ -32,7 +32,7 @@ class QueryResultItem(BaseModel):
     timestamp: float
     video_pos_ms: Optional[float] = None
     timestamp_human: str
-    global_id: Optional[int] = None
+    global_id: Optional[Union[int, str]] = None
     class_label: str
     color: str
     type: Optional[str] = None

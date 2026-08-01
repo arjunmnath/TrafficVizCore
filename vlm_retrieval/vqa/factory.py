@@ -14,7 +14,7 @@ def get_vqa_reasoner(
 
     Args:
         model_name: Name of the model:
-          - API models: 'openai-5.6', 'gpt-4o', 'gemini-2.5-flash', 'gemini-1.5-pro'
+          - API models: 'openai-5.6', 'gpt-4o', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'
           - On-device models: 'Qwen/Qwen3-VL-8B-Instruct', 'Qwen/Qwen2.5-VL-7B-Instruct'
         device: Device to load local models on ("auto", "cuda", "mps", "cpu")
         device_map: Multi-GPU allocation strategy ("balanced", "auto", "sequential", etc.)
@@ -43,6 +43,6 @@ def get_vqa_reasoner(
         raise ValueError(
             f"Unsupported agentic reasoning model: '{model_name}'. "
             "Supported models include: "
-            "API: 'openai-5.6', 'gpt-4o', 'gemini-2.5-flash', 'gemini-1.5-pro'; "
+            "API: 'openai-5.6', 'gpt-4o', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'; "
             "On-device: 'Qwen/Qwen3-VL-8B-Instruct'."
         )

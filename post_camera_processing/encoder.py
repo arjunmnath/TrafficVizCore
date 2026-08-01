@@ -1,12 +1,12 @@
 """Encoder module for Post-Camera Processing.
 
-Batch-encodes selected representative vehicle crops using SigLIP2 into unit-normalized L2 visual
-embeddings compatible with the vector store and downstream Agentic VLM retrieval engine.
+Batch-encodes selected representative vehicle crops using visual retrieval encoders (SigLIP, CLIP, etc.)
+into unit-normalized L2 visual embeddings compatible with the vector store and downstream Agentic VLM retrieval engine.
 """
 
 from __future__ import annotations
 
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 import numpy as np
 from PIL import Image
 
@@ -15,8 +15,8 @@ from vlm_retrieval.retrieval.encoder.factory import get_retrieval_encoder
 from shared.utils import setup_logger
 
 
-class SigLIP2BatchEncoder:
-    """Handles batched visual feature extraction via SigLIP2 retrieval model."""
+class RetrievalBatchEncoder:
+    """Handles batched visual feature extraction via configured retrieval model (SigLIP, CLIP, etc.)."""
 
     def __init__(
         self,
@@ -25,12 +25,12 @@ class SigLIP2BatchEncoder:
         batch_size: int = 32,
         logger: Optional[Any] = None,
     ) -> None:
-        self.logger = logger or setup_logger("SigLIP2BatchEncoder")
+        self.logger = logger or setup_logger("RetrievalBatchEncoder")
         self.model_name = model_name
         self.device = device
         self.batch_size = batch_size
 
-        self.logger.info(f"Initializing SigLIP2 retrieval encoder: '{model_name}' on device '{device}'")
+        self.logger.info(f"Initializing retrieval encoder: '{model_name}' on device '{device}'")
         self.encoder = get_retrieval_encoder(model_name=model_name, device=device)
 
     def encode_crops(self, crop_items: List[FilteredCropItem]) -> List[np.ndarray]:
@@ -71,3 +71,4 @@ class SigLIP2BatchEncoder:
                     embeddings_list.append(dummy_vec)
 
         return embeddings_list
+

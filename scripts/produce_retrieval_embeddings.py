@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """
-Produce SigLIP2 Semantic Retrieval Embeddings Script (Post-Camera Processing Pipeline)
+Produce Semantic Retrieval Embeddings Script (Post-Camera Processing Pipeline)
 
 Processes crop collections for Global Vehicle Identities:
 1. Gathers all crops belonging to each Global Identity across tracks & cameras.
 2. Applies 2-stage quality pruning (hard filters: area, aspect ratio, border truncation, blur; soft scoring).
 3. Selects representative semantic views via Farthest Point Sampling (FPS) and temporal redundancy suppression.
-4. Batch encodes crops into unit-normalized L2 visual vectors using SigLIP2.
+4. Batch encodes crops into unit-normalized L2 visual vectors using configured retrieval encoder (SigLIP, CLIP, etc.).
 5. Aggregates multi-vector identity profiles and exports to `.npz` and `.json` registry for standalone inference.
 
 Usage Example:
-    # Process crops in crops.noinclude and output registry.embeddings.npz
-    python scripts/produce_siglip_embeddings.py --crop_dir crops.noinclude --output_npz registry.embeddings.npz
+    # Process crops using default SigLIP encoder
+    python scripts/produce_retrieval_embeddings.py --crop_dir crops.noinclude --global_match_json matches.json --output_npz registry.embeddings.npz --output_json registry.identities.json
 
-    # Specify custom model and target representative views count
-    python scripts/produce_siglip_embeddings.py --crop_dir reid_crops_cleaned --target_k 4 --model_name google/siglip2-so400m-patch14-384
+    # Specify CLIP model
+    python scripts/produce_retrieval_embeddings.py --crop_dir crops.noinclude --global_match_json matches.json --output_npz registry.embeddings.npz --output_json registry.identities.json --retrieval_model openai/clip-vit-base-patch32
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ from post_camera_processing import (
     EmbeddingExporter,
     QualityConfig,
     QualityFilter,
-    SigLIP2BatchEncoder,
+    RetrievalBatchEncoder,
 )
 
 console = Console()
@@ -54,7 +54,7 @@ console = Console()
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Produce SigLIP2 semantic embeddings NPZ for Global Vehicle Identities."
+        description="Produce semantic retrieval embeddings NPZ for Global Vehicle Identities using SigLIP, CLIP, or other models."
     )
     parser.add_argument(
         "--crop_dir",
@@ -81,10 +81,11 @@ def parse_args():
         help="Target output .json registry metadata file path.",
     )
     parser.add_argument(
+        "--retrieval_model",
         "--model_name",
         type=str,
         default="google/siglip2-so400m-patch14-384",
-        help="SigLIP2 retrieval model name (e.g. 'google/siglip2-so400m-patch14-384').",
+        help="Retrieval encoder model name (e.g. 'google/siglip2-so400m-patch14-384', 'openai/clip-vit-base-patch32', 'openai/clip-vit-large-patch14').",
     )
     parser.add_argument(
         "--device",
@@ -125,10 +126,10 @@ def main():
 
     console.print(
         Panel.fit(
-            "[bold cyan]Post-Camera Processing: SigLIP2 Semantic Embedding Generation[/bold cyan]\n"
+            "[bold cyan]Post-Camera Processing: Semantic Retrieval Embedding Generation[/bold cyan]\n"
             f"[dim]Crop Directory: {args.crop_dir}\n"
             f"Output NPZ: {args.output_npz}\n"
-            f"Model: {args.model_name} | Device: {args.device} | Target Views (K): {args.target_k}[/dim]",
+            f"Model: {args.retrieval_model} | Device: {args.device} | Target Views (K): {args.target_k}[/dim]",
             box=box.ROUNDED,
             border_style="cyan",
         )
@@ -160,10 +161,10 @@ def main():
     )
     diversity_sampler = DiversitySampler(config=d_config)
 
-    # Stage 4 Setup: SigLIP2 Batch Encoder
-    console.print(f"[bold yellow]Stage 2/5: Initializing SigLIP2 encoder ({args.model_name})...[/bold yellow]")
-    encoder = SigLIP2BatchEncoder(
-        model_name=args.model_name,
+    # Stage 4 Setup: Retrieval Batch Encoder
+    console.print(f"[bold yellow]Stage 2/5: Initializing retrieval encoder ({args.retrieval_model})...[/bold yellow]")
+    encoder = RetrievalBatchEncoder(
+        model_name=args.retrieval_model,
         device=args.device,
     )
 
@@ -211,7 +212,7 @@ def main():
                 filtered_crops, target_k=args.target_k
             )
 
-            # Step 3: Encoding with SigLIP2
+            # Step 3: Encoding with retrieval encoder
             crop_embeddings = encoder.encode_crops(rep_crops)
             total_encoded_crops += len(crop_embeddings)
 
@@ -246,6 +247,7 @@ def main():
     table.add_row("Total Raw Crops Gathered", str(total_raw_crops))
     table.add_row("Crops Passed Quality Filter", f"{total_passed_crops} ({total_passed_crops/max(1, total_raw_crops):.1%})")
     table.add_row("Representative Crops Encoded", str(total_encoded_crops))
+    table.add_row("Retrieval Model", args.retrieval_model)
     table.add_row("Output NPZ File", str(npz_out))
     if json_out:
         table.add_row("Output JSON Registry", str(json_out))
@@ -253,7 +255,7 @@ def main():
 
     console.print(table)
     console.print(
-        f"[bold green]Successfully generated SigLIP2 semantic embeddings NPZ in {elapsed:.2f}s![/bold green]"
+        f"[bold green]Successfully generated retrieval embeddings NPZ using '{args.retrieval_model}' in {elapsed:.2f}s![/bold green]"
     )
 
 

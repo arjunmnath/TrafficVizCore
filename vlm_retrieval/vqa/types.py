@@ -45,7 +45,7 @@ class RankedResult:
     camera_id: str
     camera_timestamp: float
     video_pos_ms: float
-    track_id: int
+    track_id: Union[int, str]
     vlm_score: float
     vlm_explanation: str
     frame: Optional[Image.Image] = None

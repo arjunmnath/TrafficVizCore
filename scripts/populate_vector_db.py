@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Database prepopulation coordinator that encodes extracted crop images using SigLIP2 and stores embeddings in the Chroma vector store.
+Database prepopulation coordinator that encodes extracted crop images using retrieval encoder (SigLIP, CLIP, etc.) and stores embeddings in the Chroma vector store.
 Imports tracking metadata and saves associated embeddings into database collections.
 """
 

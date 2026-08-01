@@ -25,13 +25,12 @@ def get_retrieval_encoder(model_name: str, device: str = "auto") -> BaseRetrieva
         from vlm_retrieval.retrieval.encoder.siglip2 import SigLIP2Encoder
 
         return SigLIP2Encoder(model_name=model_name, device=device)
-    elif "openclip" in model_name_lower or "vit-" in model_name_lower or "clip" in model_name_lower:
-        from vlm_retrieval.retrieval.encoder.openclip import OpenCLIPEncoder
+    elif "clip" in model_name_lower or "vit-" in model_name_lower:
+        from vlm_retrieval.retrieval.encoder.clip import CLIPEncoder
 
-        return OpenCLIPEncoder(model_name=model_name, device=device)
+        return CLIPEncoder(model_name=model_name, device=device)
     else:
-        # Default to SigLIP2 for backwards compatibility with any standard HuggingFace models,
-        # but log a warning.
+        # Default to SigLIP2 for backwards compatibility with any standard HuggingFace models
         import logging
 
         logger = logging.getLogger("RetrievalEncoderFactory")
@@ -41,3 +40,4 @@ def get_retrieval_encoder(model_name: str, device: str = "auto") -> BaseRetrieva
         from vlm_retrieval.retrieval.encoder.siglip2 import SigLIP2Encoder
 
         return SigLIP2Encoder(model_name=model_name, device=device)
+

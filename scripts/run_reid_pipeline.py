@@ -177,6 +177,14 @@ def main():
         help="Enable FP16 half-precision inference for feature extraction",
     )
     parser.add_argument(
+        "--reid_model_type",
+        "--reid-model-type",
+        type=str,
+        default="resnetibnreid",
+        choices=["resnetibnreid", "vitclipreid"],
+        help="ReID feature extractor model variant ('resnetibnreid' or 'vitclipreid')",
+    )
+    parser.add_argument(
         "--tracker",
         type=str,
         default="bytetrack.yaml",
@@ -243,6 +251,7 @@ def main():
     listener.show_configuration(config_data)
 
     feature_stage = FeatureStage(
+        model_type=args.reid_model_type,
         device=args.device,
         fp16=args.fp16,
     )

@@ -145,3 +145,4 @@ input_vids
 tests
 *.db
 dashboard
+.agents

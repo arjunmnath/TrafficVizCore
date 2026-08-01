@@ -39,8 +39,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from vlm_retrieval.config import InferenceConfig
+from vlm_retrieval.config import VLMRetrievalConfig
 from vlm_retrieval.retrieval.encoder import get_retrieval_encoder
+
 from vlm_retrieval.retrieval.search import RetrievalEngine
 from vlm_retrieval.retrieval.vector_store import VectorStore
 
@@ -129,8 +130,8 @@ def parse_args():
 
 
 def run_direct_inference(args, vector_store: VectorStore) -> List[Dict[str, Any]]:
-    """Execute direct semantic vector similarity search using SigLIP2 and VectorStore."""
-    console.print(f"[bold cyan]Initializing SigLIP2 retrieval encoder:[/bold cyan] {args.retrieval_model}")
+    """Execute direct semantic vector similarity search using Retrieval Encoder and VectorStore."""
+    console.print(f"[bold cyan]Initializing retrieval encoder:[/bold cyan] {args.retrieval_model}")
     encoder = get_retrieval_encoder(model_name=args.retrieval_model, device=args.device)
 
     retrieval_engine = RetrievalEngine(
@@ -217,7 +218,7 @@ def run_agentic_inference(args, vector_store: VectorStore) -> List[Dict[str, Any
     from vlm_retrieval.frame_extractor import FrameExtractor
     from vlm_retrieval.vqa import get_vqa_reasoner
 
-    console.print(f"[bold cyan]Initializing SigLIP2 encoder:[/bold cyan] {args.retrieval_model}")
+    console.print(f"[bold cyan]Initializing retrieval encoder:[/bold cyan] {args.retrieval_model}")
     encoder = get_retrieval_encoder(model_name=args.retrieval_model, device=args.device)
 
     retrieval_engine = RetrievalEngine(

@@ -3,7 +3,7 @@
 Interactive CCTV Semantic Search & Agentic VLM Reranking Demo Application
 
 Operates directly against .npz embedding files, registry JSON metadata, and VectorStore.
-Supports both fast direct vector search (SigLIP2 / cosine retrieval) and multistage
+Supports both fast direct vector search (Retrieval Encoder / cosine retrieval) and multistage
 Agentic VLM visual reasoning (Qwen3-VL, Gemini, OpenAI) with an interactive terminal shell loop.
 
 Usage Examples:
@@ -38,8 +38,9 @@ from rich.prompt import Prompt
 from rich.table import Table
 
 from vlm_retrieval.agentic_pipeline import AgenticPlannerPipeline
-from vlm_retrieval.config import InferenceConfig
+from vlm_retrieval.config import VLMRetrievalConfig
 from vlm_retrieval.frame_extractor import FrameExtractor
+
 from vlm_retrieval.retrieval.encoder import get_retrieval_encoder
 from vlm_retrieval.retrieval.search import RetrievalEngine
 from vlm_retrieval.retrieval.vector_store import VectorStore

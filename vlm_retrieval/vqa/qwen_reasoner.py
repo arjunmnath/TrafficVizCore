@@ -263,6 +263,74 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
                 f"{[n for n, _ in parsed_calls]}"
             )
 
+        # If the loop exhausted max_steps and the last step still had tool
+        # calls (meaning the model never emitted a voluntary final answer),
+        # make one extra generation with a forcing prompt and no tools.
+        last_step_had_tools = trajectory and trajectory[-1].tool_calls
+        if last_step_had_tools:
+            self.logger.info(
+                "ReAct loop exhausted max_steps without a final answer. "
+                "Making one extra generation to force a summary."
+            )
+            # Append a forcing prompt as a user message
+            messages.append({
+                "role": "user",
+                "content": self._build_final_answer_prompt(),
+            })
+
+            torch.cuda.empty_cache()
+            try:
+                from qwen_vl_utils import process_vision_info
+                image_inputs, video_inputs = process_vision_info(messages)
+            except Exception:
+                image_inputs, video_inputs = None, None
+
+            # Generate WITHOUT tool declarations to prevent more tool calls
+            try:
+                prompt = self.processor.apply_chat_template(
+                    messages, tokenize=False, add_generation_prompt=True
+                )
+            except Exception:
+                prompt = self.processor.apply_chat_template(
+                    messages, tokenize=False, add_generation_prompt=True
+                )
+
+            inputs = self.processor(
+                text=[prompt],
+                images=image_inputs,
+                videos=video_inputs,
+                padding=True,
+                return_tensors="pt",
+            ).to(target_device)
+
+            with torch.no_grad():
+                generated_ids = self.model.generate(**inputs, max_new_tokens=512)
+
+            del inputs
+            torch.cuda.empty_cache()
+
+            seq_len_force = generated_ids.shape[-1]
+            generated_ids_trimmed = [
+                out_ids[len(in_ids):]
+                for in_ids, out_ids in zip(
+                    generated_ids[:, :seq_len_force] if seq_len_force else generated_ids,
+                    generated_ids,
+                )
+            ]
+            forced_text = self.processor.batch_decode(
+                generated_ids_trimmed, skip_special_tokens=True
+            )[0]
+            del generated_ids, generated_ids_trimmed
+            torch.cuda.empty_cache()
+
+            if forced_text.strip():
+                forced_step = AgenticPlanStep(
+                    step_number=len(trajectory) + 1,
+                    thought=forced_text.strip(),
+                )
+                trajectory.append(forced_step)
+                self.logger.info("Received forced final answer from Qwen3-VL.")
+
         # Parse final answer from the last thought
         final_text = trajectory[-1].thought if trajectory else ""
         ranked_results = self._parse_final_answer(final_text, tools)

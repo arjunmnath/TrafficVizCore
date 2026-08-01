@@ -1,4 +1,4 @@
-"""NPZ vector store wrapper for SigLIP2 embedding search with metadata filtering."""
+"""NPZ vector store wrapper for retrieval encoder embedding search with metadata filtering."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from shared.utils import setup_logger
 
 
 class VectorStore:
-    """Local NPZ file vector store client for SigLIP2 embedding retrieval and track metadata queries."""
+    """Local NPZ file vector store client for retrieval encoder embedding retrieval and track metadata queries."""
 
     def __init__(
         self,

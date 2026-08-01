@@ -123,6 +123,33 @@ class BaseAgenticVLMReasoner(ABC):
         return msg
 
     # ------------------------------------------------------------------
+    # Max-steps exhaustion: force a final answer
+    # ------------------------------------------------------------------
+
+    def _build_final_answer_prompt(self) -> str:
+        """Build a prompt that forces the LLM to emit a structured final answer.
+
+        Used when the ReAct loop exhausts max_steps without the model
+        voluntarily stopping tool calls. This prompt is sent as a follow-up
+        user/system message with tools disabled so the model MUST respond
+        with text (including the <final_answer> block).
+        """
+        return (
+            "You have reached the maximum number of reasoning steps. "
+            "You must now provide your final answer based on ALL evidence "
+            "collected so far. Do NOT call any more tools.\n\n"
+            "Summarize your findings and respond with your structured answer:\n"
+            "<final_answer>\n"
+            '{"candidates": [\n'
+            '  {"camera_id": "...", "video_pos_ms": ..., "track_id": ..., '
+            '"confidence": 0.0-1.0, "explanation": "..."}\n'
+            "]}\n"
+            "</final_answer>\n\n"
+            "If no candidates matched, return an empty candidates list with "
+            "an explanation of why no match was found."
+        )
+
+    # ------------------------------------------------------------------
     # Final answer parsing
     # ------------------------------------------------------------------
 
@@ -166,7 +193,11 @@ class BaseAgenticVLMReasoner(ABC):
         for cand in candidates:
             camera_id = str(cand.get("camera_id", ""))
             video_pos_ms = float(cand.get("video_pos_ms", 0.0))
-            track_id = int(cand.get("track_id", 0))
+            track_id_raw = cand.get("track_id", 0)
+            try:
+                track_id = int(track_id_raw)
+            except (ValueError, TypeError):
+                track_id = str(track_id_raw)
             confidence = float(cand.get("confidence", 0.0))
             explanation = str(cand.get("explanation", ""))
 

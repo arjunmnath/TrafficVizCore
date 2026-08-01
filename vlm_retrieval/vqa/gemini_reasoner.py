@@ -11,6 +11,7 @@ import base64
 import io
 import json
 import os
+import urllib.error
 import urllib.request
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
@@ -33,13 +34,17 @@ except Exception:
 class GeminiAgenticReasoner(BaseAgenticVLMReasoner):
     """API-based VLM Reasoner using Gemini with function calling and vision."""
 
-    def __init__(self, model_name: str = "gemini-2.5-flash", api_key: Optional[str] = None) -> None:
+    def __init__(self, model_name: str = "gemini-3.5-flash", api_key: Optional[str] = None) -> None:
         self.logger = setup_logger("GeminiAgenticReasoner")
         self.model_name = model_name
         self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
 
         m_lower = model_name.lower()
-        if "gemini-flash-latest" in m_lower:
+        if "gemini-3.5" in m_lower or "3.5" in m_lower:
+            self.api_model = "gemini-3.5-flash"
+        elif "gemini-3.1" in m_lower or "3.1" in m_lower:
+            self.api_model = "gemini-3.1-pro-preview"
+        elif "gemini-flash-latest" in m_lower:
             self.api_model = "gemini-flash-latest"
         elif "gemini-2.5" in m_lower:
             self.api_model = "gemini-2.5-flash"
@@ -48,7 +53,7 @@ class GeminiAgenticReasoner(BaseAgenticVLMReasoner):
         elif "gemini" in m_lower:
             self.api_model = model_name
         else:
-            self.api_model = "gemini-2.5-flash"
+            self.api_model = "gemini-3.5-flash"
 
     def plan_and_execute(
         self,
@@ -102,7 +107,10 @@ class GeminiAgenticReasoner(BaseAgenticVLMReasoner):
                 "tools": gemini_tools,
             }
 
-            headers = {"Content-Type": "application/json"}
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": self.api_key,
+            }
 
             req = urllib.request.Request(
                 url,
@@ -114,6 +122,28 @@ class GeminiAgenticReasoner(BaseAgenticVLMReasoner):
             try:
                 with urllib.request.urlopen(req) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as http_err:
+                # Read the response body for actionable error details
+                error_body = ""
+                try:
+                    error_body = http_err.read().decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+                self.logger.error(
+                    f"Gemini API HTTP {http_err.code} at step {step_idx}: "
+                    f"{http_err.reason}\nResponse: {error_body[:1000]}"
+                )
+                if http_err.code == 403:
+                    raise RuntimeError(
+                        f"Gemini API returned 403 Forbidden. Check that:\n"
+                        f"  1. Your GEMINI_API_KEY / GOOGLE_API_KEY is valid\n"
+                        f"  2. The Generative Language API is enabled in your Google Cloud project\n"
+                        f"  3. The model '{self.api_model}' is available for your API key\n"
+                        f"API response: {error_body[:500]}"
+                    ) from http_err
+                raise RuntimeError(
+                    f"Gemini API call failed (HTTP {http_err.code}): {error_body[:500]}"
+                ) from http_err
             except Exception as err:
                 self.logger.error(f"Gemini API call failed at step {step_idx}: {err}")
                 raise RuntimeError(f"Gemini API call failed: {err}") from err
@@ -203,6 +233,47 @@ class GeminiAgenticReasoner(BaseAgenticVLMReasoner):
                 f"[Step {step_idx}] Executed {len(func_calls)} tool call(s): "
                 f"{[fc.get('name') for fc in func_calls]}"
             )
+
+        # If the loop exhausted max_steps and the last step still had tool
+        # calls (meaning the model never emitted a voluntary final answer),
+        # make one extra API call with tools disabled to force a summary.
+        last_step_had_tools = trajectory and trajectory[-1].tool_calls
+        if last_step_had_tools:
+            self.logger.info(
+                "ReAct loop exhausted max_steps without a final answer. "
+                "Making one extra call to force a summary."
+            )
+            # Append a forcing prompt
+            contents.append({
+                "role": "user",
+                "parts": [{"text": self._build_final_answer_prompt()}],
+            })
+
+            # Call Gemini WITHOUT tools so it cannot emit more function calls
+            force_payload = {"contents": contents}
+            force_req = urllib.request.Request(
+                url,
+                data=json.dumps(force_payload).encode("utf-8"),
+                headers=headers,
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(force_req) as resp:
+                    force_data = json.loads(resp.read().decode("utf-8"))
+                force_candidates = force_data.get("candidates", [])
+                if force_candidates:
+                    force_parts = force_candidates[0].get("content", {}).get("parts", [])
+                    forced_text = " ".join(p.get("text", "") for p in force_parts).strip()
+                    if forced_text:
+                        # Record as an extra trajectory step
+                        forced_step = AgenticPlanStep(
+                            step_number=len(trajectory) + 1,
+                            thought=forced_text,
+                        )
+                        trajectory.append(forced_step)
+                        self.logger.info("Received forced final answer from Gemini.")
+            except Exception as err:
+                self.logger.warning(f"Failed to get forced final answer from Gemini: {err}")
 
         # Parse final answer from the last thought
         final_text = trajectory[-1].thought if trajectory else ""

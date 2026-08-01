@@ -5,39 +5,53 @@ import torch
 
 from reid.stages.base import PipelineStage
 from reid.utils import ReIDPipelineListener, has_minimum_roi_area, FrameData
-from reid.inference import EnsembleReID
+from reid.inference import build_reid_model, BaseReIDExtractor
 
 
 class FeatureStage(PipelineStage):
-    """Stage 2: Extracts ReID features using the 3 ensemble models and returns their centroid."""
+    """Stage 2: Extracts ReID features using configured adapter model (ResNetIBNReID or ViTCLIPReID)."""
 
     def __init__(
         self,
+        model_type: str = "resnetibnreid",
         device: str = "cpu",
         fp16: bool = True,
+        model_path: Optional[str] = None,
+        extractor: Optional[BaseReIDExtractor] = None,
     ):
         """Constructor.
 
         Args:
+            model_type (str): ReID model variant name ('resnetibnreid' or 'vitclipreid').
             device (str): Inference device.
             fp16 (bool): Whether to enable half precision.
+            model_path (Optional[str]): Optional custom model path.
+            extractor (Optional[BaseReIDExtractor]): Pre-instantiated ReID extractor adapter.
         """
+        self.model_type = model_type
         self.device = (
             device if device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu")
         )
         self.fp16 = fp16
-        self.ensemble = None
+        self.model_path = model_path
+        self.extractor = extractor
 
     def initialize(self, listener: ReIDPipelineListener = None) -> None:
+        if self.extractor is None:
+            if listener:
+                listener.on_init_status(f"Loading ReID model adapter ({self.model_type})...")
+            self.extractor = build_reid_model(
+                variant=self.model_type,
+                device=self.device,
+                fp16=self.fp16,
+                model_path=self.model_path,
+            )
+
+
         if listener:
-            listener.on_init_status("Loading ensembled ReID models...")
-        self.ensemble = EnsembleReID(
-            device=self.device,
-            fp16=self.fp16,
-        )
-        if listener:
+            num_submodels = len(getattr(self.extractor, "models", [self.extractor]))
             listener.on_init_status(
-                f"Loaded {len(self.ensemble.models)} ensembled models successfully."
+                f"Loaded {self.model_type} ReID model ({num_submodels} submodel(s)) successfully."
             )
 
     def process(self, data: FrameData, pipeline: Any) -> FrameData:
@@ -72,10 +86,14 @@ class FeatureStage(PipelineStage):
             features.append(None)  # Placeholder
 
         if len(valid_crops) > 0:
-            embeddings_tensor = self.ensemble.extract_batch(valid_crops, is_bgr=True)
-            embeddings = embeddings_tensor.cpu().numpy()
+            embeddings = self.extractor.extract_batch(valid_crops, is_bgr=True)
+            if isinstance(embeddings, torch.Tensor):
+                embeddings_np = embeddings.cpu().numpy()
+            else:
+                embeddings_np = np.asarray(embeddings, dtype=np.float32)
+
             for embed_idx, orig_idx in enumerate(valid_idxs):
-                features[orig_idx] = embeddings[embed_idx]
+                features[orig_idx] = embeddings_np[embed_idx]
 
         # Resolve missing feature dimensions
         valid_feat = next((f for f in features if f is not None), None)
@@ -84,8 +102,12 @@ class FeatureStage(PipelineStage):
         else:
             # All crops are invalid; run a dummy extraction to determine feature dimension
             dummy_crop = np.zeros((128, 64, 3), dtype=np.uint8)
-            dummy_feat = self.ensemble.extract(dummy_crop, is_bgr=True)
-            feat_dim = dummy_feat.shape[0]
+            dummy_feat = self.extractor.extract(dummy_crop, is_bgr=True)
+            if isinstance(dummy_feat, torch.Tensor):
+                dummy_feat_np = dummy_feat.cpu().numpy()
+            else:
+                dummy_feat_np = np.asarray(dummy_feat, dtype=np.float32)
+            feat_dim = dummy_feat_np.shape[0]
 
         zeros = np.zeros(feat_dim, dtype=np.float32)
         features = [f if f is not None else zeros for f in features]

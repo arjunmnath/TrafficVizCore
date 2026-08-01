@@ -66,17 +66,14 @@ Each stage inherits from the [PipelineStage](./reid/stages/base.py#L6) base clas
 
 ---
 
-## 3. ReID Model Ensemble ([reid/inference/](./reid/inference/))
+## 3. ReID Feature Production Adapters ([reid/inference/](./reid/inference/))
 
-To obtain robust, identity-preserving feature representations, the system executes an ensemble model with centroid fusion:
+To obtain robust, identity-preserving feature representations, the system implements an **Adapter Pattern** (`BaseReIDExtractor`) allowing pluggable feature extraction variants:
 
-* **[EnsembleModel](./reid/inference/model/ensemble_model.py#L6)**: A unified `nn.Module` wrapping three deep backbones loaded from distinct check-points:
-  1. `resnet101_ibn_a` (Model checkpoint 1)
-  2. `resnet101_ibn_a` (Model checkpoint 2)
-  3. `resnext101_ibn_a` (Model checkpoint 3)
-* **Test-Time Augmentation (TTA)**: If enabled, it forwards both the original and horizontally flipped crops, summing their intermediate feature representations.
-* **Centroid Fusion**: For each crop, embeddings are extracted from all three submodels, L2-normalized individually, averaged to produce the mean centroid representation, and L2-normalized again to generate a final unit-length feature vector.
-* **[EnsembleReID](./reid/inference/extractor.py#L12)**: The production-grade inference wrapper. It performs image pre-processing (resize to 256x256, mean/standard deviation scaling) and manages FP16 half-precision batch forward passes.
+* **[BaseReIDExtractor](./reid/inference/base.py#L6)**: The common adapter interface defining `extract` and `extract_batch`.
+* **[ResNetIBNReID](./reid/inference/resnet_ibn.py#L12)**: PyTorch 3-submodel ensemble with centroid fusion (`resnet101_ibn_a` x2, `resnext101_ibn_a` x1).
+* **[ViTCLIPReID](./reid/inference/vit_clip.py#L10)**: High-speed ONNX Runtime-based extractor using Vision Transformer CLIP (`vehicle_vit_clip_reid.onnx`).
+* **[build_reid_model](./reid/inference/model_factory.py#L56)**: Factory function resolving extractor variants by string name (`"resnetibnreid"`, `"vitclipreid"`).
 
 ---
 
