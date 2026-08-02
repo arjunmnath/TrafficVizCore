@@ -174,6 +174,7 @@ class TrackingStage(PipelineStage):
                     elapsed_time=data.elapsed_time,
                     fps=processing_fps,
                     registry=pipeline.registry,
+                    step=getattr(data, "frame_step", 1),
                 )
             return data
 
@@ -224,6 +225,7 @@ class TrackingStage(PipelineStage):
                 fps=processing_fps,
                 registry=pipeline.registry,
                 log_message=log_line,
+                step=getattr(data, "frame_step", 1),
             )
 
         return data

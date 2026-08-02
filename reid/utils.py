@@ -29,6 +29,7 @@ class FrameData:
     total_videos: int = 1
     elapsed_time: float = 0.0
     listener: Optional[Any] = None
+    frame_step: int = 1
 
     # Pipeline output fields populated by stages
     boxes: Optional[np.ndarray] = None  # shape (N, 4)
@@ -69,6 +70,7 @@ class ReIDPipelineListener:
         fps: float,
         registry: "SimpleRegistry",
         log_message: str | None = None,
+        step: int = 1,
     ):
         pass
 

@@ -28,11 +28,14 @@ class SamplerStage(PipelineStage):
         if data.skip or data.end_of_stream:
             return data
 
-        fps = data.fps if data.fps > 0 else 30.0
-        if self.sample_fps <= 0.0 or self.sample_fps >= fps:
+        if self.sample_fps <= 0.0:
             return data
 
+        fps = data.fps if data.fps > 0 else 30.0
+
         if self.time_based:
+            if self.sample_fps >= fps:
+                return data
             current_time = time.time()
             # If elapsed time since last frame is less than sample interval, skip frame
             if current_time - self.last_processed_time < self.interval_seconds:
@@ -40,8 +43,14 @@ class SamplerStage(PipelineStage):
             else:
                 self.last_processed_time = current_time
         else:
+            if self.sample_fps < fps:
+                frame_interval = max(1, int(round(fps / self.sample_fps)))
+            elif self.sample_fps > 1.0:
+                frame_interval = int(round(self.sample_fps))
+            else:
+                return data
+
             # Traditional count-based downsampling (ensure frame 1 is processed)
-            frame_interval = max(1, int(round(fps / self.sample_fps)))
             if (data.frame_count - 1) % frame_interval != 0:
                 data.skip = True
 

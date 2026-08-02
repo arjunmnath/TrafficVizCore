@@ -121,7 +121,10 @@ class GeminiAgenticReasoner(BaseAgenticVLMReasoner):
 
             try:
                 with urllib.request.urlopen(req) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
+                    response = resp.read().decode("utf-8")
+                    with open('reasoning.txt', 'a+') as f:
+                        f.write(json.dumps(json.loads(response), indent=4))
+                    data = json.loads(response)
             except urllib.error.HTTPError as http_err:
                 # Read the response body for actionable error details
                 error_body = ""
@@ -169,6 +172,7 @@ class GeminiAgenticReasoner(BaseAgenticVLMReasoner):
                 step_number=step_idx,
                 thought=thought.strip() or f"Step {step_idx}: processing...",
             )
+            self._log_raw_response(step_idx, step.thought)
 
             # If no function calls → this is the final answer
             if not func_calls:
@@ -270,6 +274,7 @@ class GeminiAgenticReasoner(BaseAgenticVLMReasoner):
                             step_number=len(trajectory) + 1,
                             thought=forced_text,
                         )
+                        self._log_raw_response(forced_step.step_number, forced_text)
                         trajectory.append(forced_step)
                         self.logger.info("Received forced final answer from Gemini.")
             except Exception as err:

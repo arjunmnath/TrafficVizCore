@@ -226,7 +226,7 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
             del generated_ids, generated_ids_trimmed
             torch.cuda.empty_cache()
 
-            self.logger.info(f"[Step {step_idx}] Qwen3-VL Output: {output_text}")
+            self._log_raw_response(step_idx, output_text)
             step = AgenticPlanStep(step_number=step_idx, thought=output_text)
 
             # Parse tool calls — no keyword fallback
@@ -328,6 +328,7 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
                     step_number=len(trajectory) + 1,
                     thought=forced_text.strip(),
                 )
+                self._log_raw_response(forced_step.step_number, forced_text.strip())
                 trajectory.append(forced_step)
                 self.logger.info("Received forced final answer from Qwen3-VL.")
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-System Evaluation Script for CCTV ReID & Object Tracking on Scene 6 (S06).
+ReID Pipeline Benchmark Script for CCTV ReID & Object Tracking on Scene 6 (S06).
 Evaluates end-to-end performance on dataset/test/S06 against reference ground truth annotations.
 Reports key ReID retrieval metrics (Rank-1, Rank-5, mAP, mINP) and multi-object tracking metrics
 (IDF1, HOTA, DetA, AssA, MOTA), comparing baseline tracking against intra-camera trajectory fusion.
@@ -114,7 +114,8 @@ class EvaluationUIListener(ReIDPipelineListener):
 
     def on_frame_processed(self, *args, **kwargs):
         if self.pbar is not None:
-            self.pbar.update(1)
+            step = kwargs.get("step", kwargs.get("frame_step", 1))
+            self.pbar.update(step)
             fps = kwargs.get("fps", 0.0)
             if fps > 0:
                 self.pbar.set_postfix(fps=f"{fps:.1f}")

@@ -39,12 +39,13 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from shared.utils import setup_logger
 from vlm_retrieval.config import VLMRetrievalConfig
 from vlm_retrieval.retrieval.encoder import get_retrieval_encoder
-
 from vlm_retrieval.retrieval.search import RetrievalEngine
 from vlm_retrieval.retrieval.vector_store import VectorStore
 
+logger = setup_logger("run_standalone_inference")
 console = Console()
 
 
@@ -272,16 +273,19 @@ def run_agentic_inference(args, vector_store: VectorStore) -> List[Dict[str, Any
     console.print("\n")
     console.print(Panel(table, border_style="cyan", expand=False))
 
-    # Print reasoning traces to console
+    # Print reasoning traces to console and log VLM raw response
     if trajectory:
         console.print("\n[bold yellow]Agentic Reasoning Traces & Execution Steps:[/bold yellow]")
         for step in trajectory:
             console.print(f"\n[bold underline]Step {step.step_number}[/bold underline]: {step.thought.strip()}")
+            logger.info(f"VLM Raw Response [Step {step.step_number}]: {step.thought.strip()}")
             for call in step.tool_calls:
                 console.print(f"  [cyan]🔧 Tool Call [{call.call_id}]:[/cyan] {call.name}({call.arguments})")
+                logger.info(f"Tool Call [{call.call_id}]: {call.name}({call.arguments})")
             for res in step.tool_results:
                 status_str = "[red]ERROR[/red]" if res.is_error else "[green]SUCCESS[/green]"
                 console.print(f"  [magenta]📥 Tool Result [{res.call_id}]:[/magenta] Status={status_str} | Content={res.content}")
+                logger.info(f"Tool Result [{res.call_id}]: Status={'ERROR' if res.is_error else 'SUCCESS'} | Content={res.content}")
 
     return formatted_results, trajectory
 

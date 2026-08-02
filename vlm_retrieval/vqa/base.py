@@ -58,6 +58,11 @@ class BaseAgenticVLMReasoner(ABC):
         """
         pass
 
+    def _log_raw_response(self, step_number: int, response_text: str) -> None:
+        """Log raw VLM output response for a reasoning step."""
+        active_logger = getattr(self, "logger", logger)
+        active_logger.info(f"VLM Raw Response [Step {step_number}]: {response_text.strip()}")
+
     # ------------------------------------------------------------------
     # System prompt construction
     # ------------------------------------------------------------------
