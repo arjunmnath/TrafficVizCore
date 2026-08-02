@@ -3,7 +3,9 @@
 System Evaluation Script for CCTV ReID & Object Tracking on Scene 6 (S06).
 Evaluates end-to-end performance on dataset/test/S06 against reference ground truth annotations.
 Reports key ReID retrieval metrics (Rank-1, Rank-5, mAP, mINP) and multi-object tracking metrics
-(IDF1, HOTA, DetA, AssA, MOTA, IDSW), comparing baseline tracking against intra-camera trajectory fusion.
+(IDF1, HOTA, DetA, AssA, MOTA), comparing baseline tracking against intra-camera trajectory fusion.
+Runs the ReID pipeline ONCE, caches intermediate predictions & terminated tracks, and executes
+baseline and fused evaluation offline with detailed progress logging.
 Saves concise evaluation reports to JSON and text summary files.
 """
 
@@ -15,6 +17,7 @@ import time
 import glob
 import csv
 import json
+import copy
 import argparse
 import numpy as np
 from typing import Dict, List, Any, Tuple, Optional
@@ -40,6 +43,8 @@ from reid.postprocessing import (
     TrajectoryCompressionStage,
     IntraCameraTrajectoryFusionStage,
 )
+from reid.postprocessing.base import PostProcessingStage
+from reid.postprocessing.pipeline import TerminatedTrack
 from reid.stages import (
     SamplerStage,
     VideoFeederStage,
@@ -54,25 +59,76 @@ from reid.eval_metrics import (
 )
 
 
-class QuietUIListener(ReIDPipelineListener):
-    """Quiet pipeline listener that suppresses per-frame console spam during evaluation."""
+from tqdm import tqdm
 
-    def __init__(self, console: Console, verbose: bool = False):
+
+class TerminatedTrackCollectorStage(PostProcessingStage):
+    """Postprocessing stage that collects all TerminatedTrack instances during single pipeline pass."""
+
+    def __init__(self) -> None:
+        self.tracks: List[TerminatedTrack] = []
+
+    def process(self, track: TerminatedTrack) -> TerminatedTrack:
+        self.tracks.append(track)
+        return track
+
+
+class EvaluationUIListener(ReIDPipelineListener):
+    """Pipeline listener with tqdm progress bar tracking per video feed."""
+
+    def __init__(self, console: Console, max_frames: int = 0, verbose: bool = False):
         self.console = console
+        self.max_frames = max_frames
         self.verbose = verbose
+        self.start_t = time.time()
+        self.feed_name = ""
+        self.current_idx = 1
+        self.total_videos = 1
+        self.pbar: Optional[tqdm] = None
+
+    def set_video_context(self, current_idx: int, total_videos: int):
+        self.current_idx = current_idx
+        self.total_videos = total_videos
 
     def on_video_start(
         self, video_path: str, video_idx: int, total_videos: int, total_frames: int, fps: float
     ):
-        if self.verbose:
-            feed_name = os.path.basename(os.path.dirname(video_path))
-            self.console.print(f"    • [{video_idx}/{total_videos}] Processing feed {feed_name}...")
+        self.feed_name = os.path.basename(os.path.dirname(video_path)) or os.path.basename(video_path)
+        tot = self.total_videos if self.total_videos > 1 else total_videos
+        idx = self.current_idx if self.current_idx >= 1 else video_idx
+
+        # Determine target frame count for progress bar
+        if self.max_frames > 0:
+            target_total = min(total_frames, self.max_frames) if total_frames > 0 else self.max_frames
+        else:
+            target_total = total_frames if total_frames > 0 else None
+
+        self.pbar = tqdm(
+            total=target_total,
+            desc=f"  [{idx}/{tot}] Feed {self.feed_name}",
+            unit="frame",
+            leave=True,
+            dynamic_ncols=True,
+        )
+        self.start_t = time.time()
 
     def on_frame_processed(self, *args, **kwargs):
-        pass
+        if self.pbar is not None:
+            self.pbar.update(1)
+            fps = kwargs.get("fps", 0.0)
+            if fps > 0:
+                self.pbar.set_postfix(fps=f"{fps:.1f}")
 
     def on_video_end(self, video_path: str, total_frames: int):
-        pass
+        if self.pbar is not None:
+            self.pbar.close()
+            self.pbar = None
+        elapsed = time.time() - self.start_t
+        fps = total_frames / elapsed if elapsed > 0.0 else 0.0
+        self.console.print(
+            f"    [green]✓[/green] Completed feed [bold white]{self.feed_name}[/bold white] ({total_frames} frames processed in {elapsed:.2f}s, {fps:.1f} FPS)"
+        )
+
 
 
 def parse_args() -> argparse.Namespace:
@@ -233,19 +289,19 @@ def load_ground_truth_records(
     return gt_frames_flat, gt_by_feed
 
 
-def run_pipeline_experiment(
+def run_single_pipeline_pass(
     videos: List[str],
     args: argparse.Namespace,
     console: Console,
-    enable_intra_camera_fusion: bool = False,
-) -> Tuple[Dict[str, SimpleRegistry], List[Dict[str, Any]], float]:
-    """Runs the ReID pipeline on Scene 6 video feeds cleanly and returns registry, frame predictions, and runtime."""
+) -> Tuple[Dict[str, SimpleRegistry], List[Dict[str, Any]], List[TerminatedTrack], float]:
+    """Runs the ReID pipeline ONCE across Scene 6 video feeds, caching registries, predictions, and terminated tracks."""
+    collector = TerminatedTrackCollectorStage()
+
     postprocessing_stages = [
         TrajectoryFusionStage(mode="attention"),
         TrajectoryCompressionStage(),
+        collector,
     ]
-    if enable_intra_camera_fusion:
-        postprocessing_stages.append(IntraCameraTrajectoryFusionStage(fusion_mode="attention"))
 
     postprocessing_pipeline = PostProcessingPipeline(postprocessing_stages)
 
@@ -281,11 +337,13 @@ def run_pipeline_experiment(
     setattr(pipeline, "recorded_predictions", [])
 
     feeder_stage = stages[0]
-    listener = QuietUIListener(console, verbose=args.verbose)
+    listener = EvaluationUIListener(console, max_frames=args.num_frames, verbose=args.verbose)
     pipeline.initialize(listener)
+
 
     start_t = time.time()
     for idx, video in enumerate(videos):
+        listener.set_video_context(idx + 1, len(videos))
         cam_dir = os.path.dirname(video)
         feed_name = os.path.basename(cam_dir) or os.path.basename(video)
         pipeline.registry = registries[feed_name]
@@ -294,7 +352,50 @@ def run_pipeline_experiment(
 
     elapsed = time.time() - start_t
     recorded_preds = getattr(pipeline, "recorded_predictions", [])
-    return registries, recorded_preds, elapsed
+    return registries, recorded_preds, collector.tracks, elapsed
+
+
+def apply_intra_camera_fusion(
+    registries: Dict[str, SimpleRegistry],
+    terminated_tracks: List[TerminatedTrack],
+    console: Console,
+) -> Dict[str, SimpleRegistry]:
+    """Applies IntraCameraTrajectoryFusionStage offline to cached baseline registries and tracks."""
+    fused_registries = copy.deepcopy(registries)
+    fused_tracks = copy.deepcopy(terminated_tracks)
+
+    # Group tracks by feed_name
+    tracks_by_feed: Dict[str, List[TerminatedTrack]] = {}
+    for track in fused_tracks:
+        feed = track.feed_name
+        if feed not in tracks_by_feed:
+            tracks_by_feed[feed] = []
+        tracks_by_feed[feed].append(track)
+
+    total_merges = 0
+    for feed_name, reg in fused_registries.items():
+        feed_tracks = tracks_by_feed.get(feed_name, [])
+        if not feed_tracks:
+            continue
+
+        fusion_stage = IntraCameraTrajectoryFusionStage(
+            fusion_mode="attention",
+            registry=reg,
+        )
+
+        initial_identities = len(reg.identities)
+        fusion_stage.process_tracks(feed_tracks, registry=reg)
+        final_identities = len(reg.identities)
+        feed_merges = len(reg.merged_track_map)
+
+        console.print(
+            f"  [cyan]• Feed {feed_name}:[/cyan] Processed [bold white]{len(feed_tracks)}[/bold white] tracks | "
+            f"Identities: [yellow]{initial_identities}[/yellow] → [green]{final_identities}[/green] | Merged: [bold magenta]{feed_merges}[/bold magenta] fragmented trajectories"
+        )
+        total_merges += feed_merges
+
+    console.print(f"  [bold green]✓ Intra-camera trajectory fusion complete ({total_merges} track pairs merged across all feeds)[/bold green]")
+    return fused_registries
 
 
 def evaluate_system_performance(
@@ -339,22 +440,21 @@ def evaluate_system_performance(
     )
 
     # 2. MOT Tracking Metrics
-    track_to_master: Dict[Tuple[str, int], int] = {}
-    for feed_name, registry in registries.items():
-        for track_id, entry in registry.identities.items():
-            ct = entry.get("compressed_track")
-            master_id = track_id
-            if ct and isinstance(ct, dict) and "metadata" in ct:
-                master_id = ct["metadata"].get("track_id", track_id)
-            track_to_master[(feed_name, track_id)] = master_id
-
     preds_map: Dict[Tuple[str, int], List[Dict[str, Any]]] = {}
     for p in recorded_preds:
         key = (p["feed"], p["frame"])
         if key not in preds_map:
             preds_map[key] = []
 
-        master_id = track_to_master.get((p["feed"], p["track_id"]), p["track_id"])
+        feed_reg = registries.get(p["feed"])
+        master_id = p["track_id"]
+        if feed_reg is not None:
+            master_id = feed_reg.get_master_track_id(p["track_id"])
+            if master_id in feed_reg.identities:
+                ct = feed_reg.identities[master_id].get("compressed_track")
+                if ct and isinstance(ct, dict) and "metadata" in ct:
+                    master_id = ct["metadata"].get("track_id", master_id)
+
         preds_map[key].append({"track_id": master_id, "bbox": p["bbox"]})
 
     pred_frames_flat = []
@@ -394,6 +494,7 @@ def save_evaluation_results(
         "yolo_model": args.yolo_model,
         "tracker": args.tracker,
         "reid_threshold": args.threshold,
+        "reid_model_type": args.reid_model_type,
         "metrics": {
             "baseline": {
                 "reid": reid_base,
@@ -432,7 +533,7 @@ def save_evaluation_results(
             f"Video Feeds ({len(videos)}): {', '.join([os.path.basename(os.path.dirname(v)) for v in videos])}\n"
         )
         f.write(
-            f"Frames per video: {args.num_frames} | Device: {args.device} | Model: {args.yolo_model}\n"
+            f"Frames per video: {args.num_frames} | Device: {args.device} | Model: {args.yolo_model} | ReID Model: {args.reid_model_type}\n"
         )
         f.write("------------------------------------------------------------------------\n\n")
 
@@ -474,8 +575,10 @@ def save_evaluation_results(
 
 
 def main():
+    sys.stdout.reconfigure(line_buffering=True)
     console = Console()
     args = parse_args()
+
 
     videos = discover_s06_videos(args.dataset_dir, args.videos)
     if not videos:
@@ -486,40 +589,62 @@ def main():
 
     console.print(
         Panel.fit(
-            "[bold green]CCTV System Evaluation (Scene 6)[/bold green]\n"
-            f"Dataset: {args.dataset_dir} | Feeds: {len(videos)} | Frames/feed: {args.num_frames} | Device: {args.device}",
+            "[bold green]CCTV System Evaluation (Scene 6 Benchmark)[/bold green]\n"
+            f"Dataset: {args.dataset_dir} | Feeds: {len(videos)} | Frames/feed: {args.num_frames} | Device: {args.device} | ReID Model: {args.reid_model_type}",
             border_style="cyan",
         )
     )
 
-    # Load ground truth annotations
-    console.print("[bold yellow]• Loading ground truth annotations...[/bold yellow]")
+    # Step 1: Load Ground Truth
+    console.print("\n[bold yellow]Step 1/5: Loading ground truth annotations...[/bold yellow]")
     gt_frames_flat, gt_by_feed = load_ground_truth_records(videos, args.num_frames)
     console.print(
-        f"  Loaded [bold white]{len(gt_frames_flat)}[/bold white] ground truth frame records."
+        f"  Loaded [bold white]{len(gt_frames_flat)}[/bold white] ground truth frame records across [bold white]{len(gt_by_feed)}[/bold white] feeds."
     )
 
-    # Run Baseline Experiment
+    # Step 2: Single Pipeline Execution & Caching
     console.print(
-        "\n[bold yellow]• Evaluating Baseline Tracking (No Intra-Camera Fusion)...[/bold yellow]"
+        "\n[bold yellow]Step 2/5: Running single ReID & Object Tracking Pipeline pass...[/bold yellow]"
     )
-    reg_base, preds_base, time_base = run_pipeline_experiment(
-        videos, args, console, enable_intra_camera_fusion=False
+    console.print("  [dim](YOLO detection + ReID embedding extraction + ByteTrack running once; outputs cached)[/dim]")
+    reg_base, recorded_preds, terminated_tracks, pipeline_time = run_single_pipeline_pass(
+        videos, args, console
     )
-    reid_base, mot_base = evaluate_system_performance(reg_base, preds_base, gt_frames_flat)
-    console.print(f"  Completed Baseline in [bold white]{time_base:.2f}s[/bold white].")
-
-    # Run Fused Experiment
+    total_baseline_identities = sum(len(r.identities) for r in reg_base.values())
     console.print(
-        "\n[bold yellow]• Evaluating Fused Tracking (With Intra-Camera Fusion Enabled)...[/bold yellow]"
+        f"  [bold green]✓ Single pipeline pass complete[/bold green] in [bold white]{pipeline_time:.2f}s[/bold white]. "
+        f"Cached [bold white]{len(recorded_preds)}[/bold white] predictions, [bold white]{total_baseline_identities}[/bold white] baseline identities, and [bold white]{len(terminated_tracks)}[/bold white] terminated tracks."
     )
-    reg_fused, preds_fused, time_fused = run_pipeline_experiment(
-        videos, args, console, enable_intra_camera_fusion=True
-    )
-    reid_fused, mot_fused = evaluate_system_performance(reg_fused, preds_fused, gt_frames_flat)
-    console.print(f"  Completed Fused in [bold white]{time_fused:.2f}s[/bold white].")
 
-    # Build Comparative Summary Table
+    # Step 3: Baseline Evaluation
+    console.print(
+        "\n[bold yellow]Step 3/5: Evaluating Baseline Metrics (No Intra-Camera Fusion)...[/bold yellow]"
+    )
+    start_eval_base = time.time()
+    reid_base, mot_base = evaluate_system_performance(reg_base, recorded_preds, gt_frames_flat)
+    eval_base_time = time.time() - start_eval_base
+    time_base = pipeline_time + eval_base_time
+    console.print(
+        f"  [bold green]✓ Baseline metrics computed[/bold green] (Rank-1: [bold white]{reid_base['rank1']:.2f}%[/bold white], IDF1: [bold white]{mot_base['IDF1']:.2f}%[/bold white], HOTA: [bold white]{mot_base['HOTA']:.2f}%[/bold white]) in {eval_base_time:.2f}s."
+    )
+
+    # Step 4: Intra-Camera Fusion Postprocessing & Evaluation
+    console.print(
+        "\n[bold yellow]Step 4/5: Applying Intra-Camera Trajectory Fusion Postprocessing...[/bold yellow]"
+    )
+    start_fused_t = time.time()
+    reg_fused = apply_intra_camera_fusion(reg_base, terminated_tracks, console)
+    reid_fused, mot_fused = evaluate_system_performance(reg_fused, recorded_preds, gt_frames_flat)
+    fused_overhead = time.time() - start_fused_t
+    time_fused = pipeline_time + fused_overhead
+    console.print(
+        f"  [bold green]✓ Fused metrics computed[/bold green] (Rank-1: [bold white]{reid_fused['rank1']:.2f}%[/bold white], IDF1: [bold white]{mot_fused['IDF1']:.2f}%[/bold white], HOTA: [bold white]{mot_fused['HOTA']:.2f}%[/bold white]) in {fused_overhead:.2f}s."
+    )
+
+    # Step 5: Summary Table & Output Reports
+    console.print(
+        "\n[bold yellow]Step 5/5: Building Summary Report & Saving Artifacts...[/bold yellow]"
+    )
     table = Table(title="System Evaluation Summary & Metrics (S06 Benchmark)")
     table.add_column("Category", style="cyan", no_wrap=True)
     table.add_column("Metric", style="bold white")
@@ -533,28 +658,28 @@ def main():
         "Rank-1 Accuracy (%)",
         f"{reid_base['rank1']:.2f}%",
         f"{reid_fused['rank1']:.2f}%",
-        f"+{reid_fused['rank1'] - reid_base['rank1']:.2f}%",
+        f"{reid_fused['rank1'] - reid_base['rank1']:+.2f}%",
     )
     table.add_row(
         "ReID",
         "Rank-5 Accuracy (%)",
         f"{reid_base['rank5']:.2f}%",
         f"{reid_fused['rank5']:.2f}%",
-        f"+{reid_fused['rank5'] - reid_base['rank5']:.2f}%",
+        f"{reid_fused['rank5'] - reid_base['rank5']:+.2f}%",
     )
     table.add_row(
         "ReID",
         "mAP (%)",
         f"{reid_base['mAP']:.2f}%",
         f"{reid_fused['mAP']:.2f}%",
-        f"+{reid_fused['mAP'] - reid_base['mAP']:.2f}%",
+        f"{reid_fused['mAP'] - reid_base['mAP']:+.2f}%",
     )
     table.add_row(
         "ReID",
         "mINP (%)",
         f"{reid_base['mINP']:.2f}%",
         f"{reid_fused['mINP']:.2f}%",
-        f"+{reid_fused['mINP'] - reid_base['mINP']:.2f}%",
+        f"{reid_fused['mINP'] - reid_base['mINP']:+.2f}%",
     )
 
     table.add_section()
@@ -565,35 +690,35 @@ def main():
         "IDF1 Score (%)",
         f"{mot_base['IDF1']:.2f}%",
         f"{mot_fused['IDF1']:.2f}%",
-        f"+{mot_fused['IDF1'] - mot_base['IDF1']:.2f}%",
+        f"{mot_fused['IDF1'] - mot_base['IDF1']:+.2f}%",
     )
     table.add_row(
         "Tracking",
         "HOTA Score (%)",
         f"{mot_base['HOTA']:.2f}%",
         f"{mot_fused['HOTA']:.2f}%",
-        f"+{mot_fused['HOTA'] - mot_base['HOTA']:.2f}%",
+        f"{mot_fused['HOTA'] - mot_base['HOTA']:+.2f}%",
     )
     table.add_row(
         "Tracking",
         "DetA (Detection Acc %)",
         f"{mot_base['DetA']:.2f}%",
         f"{mot_fused['DetA']:.2f}%",
-        f"+{mot_fused['DetA'] - mot_base['DetA']:.2f}%",
+        f"{mot_fused['DetA'] - mot_base['DetA']:+.2f}%",
     )
     table.add_row(
         "Tracking",
         "AssA (Association Acc %)",
         f"{mot_base['AssA']:.2f}%",
         f"{mot_fused['AssA']:.2f}%",
-        f"+{mot_fused['AssA'] - mot_base['AssA']:.2f}%",
+        f"{mot_fused['AssA'] - mot_base['AssA']:+.2f}%",
     )
     table.add_row(
         "Tracking",
         "MOTA (%)",
         f"{mot_base['MOTA']:.2f}%",
         f"{mot_fused['MOTA']:.2f}%",
-        f"+{mot_fused['MOTA'] - mot_base['MOTA']:.2f}%",
+        f"{mot_fused['MOTA'] - mot_base['MOTA']:+.2f}%",
     )
 
     table.add_section()
@@ -631,3 +756,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

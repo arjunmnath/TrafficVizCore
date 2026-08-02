@@ -98,13 +98,10 @@ class ReIDPipeline:
                     )
 
                     data.elapsed_time = time.time() - start_time
-                    try:
-                        for stage in self.stages:
-                            data = stage.process(data, self)
+                    for stage in self.stages:
+                        data = stage.process(data, self)
 
-                    finally:
-                        if not data.skip and not data.end_of_stream:
-                            print(data)
+
                     if data.end_of_stream:
                         break
 

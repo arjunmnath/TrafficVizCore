@@ -2,8 +2,8 @@
 
 mkdir -p artifacts
 
-rm -rf artifacts/crops
-rm -f artifacts/registry.*
+rm artifacts/crops
+rm artifacts/registry.*
 
 
 # stage 1: ingest video feed produces -> reid embeddings + compressed tracks + other metadata
