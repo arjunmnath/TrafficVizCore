@@ -25,6 +25,7 @@ class RetrievalResult:
     distance: float
     crop_path: Optional[str] = None
     raw_track_id: Optional[str] = None
+    camera_timestamp_iso: Optional[str] = None
 
 
 class RetrievalEngine:
@@ -102,6 +103,7 @@ class RetrievalEngine:
 
         crop_p = meta.get("crop_path")
         raw_tid_str = str(raw_tid) if raw_tid != 0 else str(meta.get("global_id", item["id"]))
+        cam_ts_iso = item.get("camera_timestamp_iso") or meta.get("camera_timestamp_iso")
 
         return RetrievalResult(
             id=item["id"],
@@ -114,5 +116,6 @@ class RetrievalEngine:
             distance=float(item.get("distance", 1.0)),
             crop_path=crop_p,
             raw_track_id=raw_tid_str,
+            camera_timestamp_iso=cam_ts_iso,
         )
 

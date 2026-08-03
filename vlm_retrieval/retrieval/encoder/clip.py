@@ -38,8 +38,13 @@ class CLIPEncoder(BaseRetrievalEncoder):
             self.processor = CLIPProcessor.from_pretrained(hf_model_name)
             self.model = CLIPModel.from_pretrained(hf_model_name).to(self.device).eval()
         except Exception as e:
-            self.logger.error(f"Failed to load CLIP model '{hf_model_name}': {e}")
-            raise e
+            self.logger.warning(f"Failed loading CLIP model from hub ({e}). Attempting local cache fallback...")
+            try:
+                self.processor = CLIPProcessor.from_pretrained(hf_model_name, local_files_only=True)
+                self.model = CLIPModel.from_pretrained(hf_model_name, local_files_only=True).to(self.device).eval()
+            except Exception as local_e:
+                self.logger.error(f"Failed to load CLIP model '{hf_model_name}' locally: {local_e}")
+                raise e
 
         self.logger.info("CLIP encoder loaded successfully")
 

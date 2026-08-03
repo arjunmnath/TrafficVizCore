@@ -71,6 +71,7 @@ class ReIDPipelineListener:
         registry: "SimpleRegistry",
         log_message: str | None = None,
         step: int = 1,
+        **kwargs,
     ):
         pass
 

@@ -44,6 +44,23 @@ class FrameExtractor:
                     if cam_key not in self.video_sources:
                         self.video_sources[cam_key] = str(vfile.resolve())
 
+    def extract_full_frame(
+        self,
+        camera_id: str,
+        video_pos_ms: float,
+    ) -> Optional[Image.Image]:
+        """Extract the full uncropped frame from the video at the given position (in ms).
+
+        Args:
+            camera_id: Camera identifier.
+            video_pos_ms: Position in the video in milliseconds.
+
+        Returns:
+            PIL Image of the full frame, or None if extraction fails.
+        """
+        full_frame, _ = self.extract_frame(camera_id=camera_id, video_pos_ms=video_pos_ms, bbox=None)
+        return full_frame
+
     def extract_frame(
         self,
         camera_id: str,

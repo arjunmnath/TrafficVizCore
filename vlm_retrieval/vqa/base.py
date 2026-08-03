@@ -50,12 +50,7 @@ class BaseAgenticVLMReasoner(ABC):
         max_steps: int = 5,
         camera_id_filter: str | None = None,
     ) -> Tuple[List[AgenticPlanStep], List[RankedResult]]:
-        """Perform multistage agentic planning using perception tools.
-
-        Returns:
-            trajectory: List of reasoning steps with tool calls and observations.
-            ranked_results: Final verified candidates parsed from the LLM's answer.
-        """
+        """Perform multistage agentic planning using perception tools."""
         pass
 
     def _log_raw_response(self, step_number: int, response_text: str) -> None:
@@ -94,7 +89,9 @@ class BaseAgenticVLMReasoner(ABC):
             "3. `query_metadata` only filters structural metadata (camera_id, timestamp, class_label). "
             "It cannot filter by color, make/model, or visual attributes.\n"
             "4. `get_temporal_context` retrieves nearby track events around a timestamp. "
-            "Use this for relationship queries (e.g., 'bus followed by car').\n\n"
+            "Use this for relationship queries (e.g., 'bus followed by car').\n"
+            "5. `get_entire_frame` extracts the full, uncropped video frame for a given camera ID and timestamp. "
+            "Use this when full scene context is needed.\n\n"
             "## Relationship Queries\n"
             "For queries involving multiple objects in a spatial-temporal relationship "
             "(e.g., 'a blue bus followed by a red MPV'):\n"
@@ -254,6 +251,8 @@ class BaseAgenticVLMReasoner(ABC):
             "query_metadata",
             "inspect_visual_candidate",
             "get_temporal_context",
+            "get_entire_frame",
+            "get_full_frame",
         }
 
         parsed: List[Tuple[str, Dict[str, Any]]] = []

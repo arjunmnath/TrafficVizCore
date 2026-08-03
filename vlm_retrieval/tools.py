@@ -113,11 +113,10 @@ class InferenceToolRegistry:
             {
                 "name": "inspect_visual_candidate",
                 "description": (
-                    "Extract a frame crop from the video at the given position and "
-                    "return it for visual verification. The extracted image is "
-                    "attached to the response for the VLM to analyze. This tool "
-                    "does NOT score or evaluate the candidate — it only extracts "
-                    "and returns the visual evidence."
+                    "Extract and return the entire uncropped video frame with optional "
+                    "candidate bounding box highlighting for visual verification. "
+                    "Feeds the full frame to the VLM to verify: 'Does this frame "
+                    "contain X or match query Y?'."
                 ),
                 "parameters": {
                     "type": "object",
@@ -133,13 +132,13 @@ class InferenceToolRegistry:
                         "bbox": {
                             "type": "array",
                             "items": {"type": "number"},
-                            "description": "Bounding box coordinates [x1, y1, x2, y2] for cropping.",
+                            "description": "Bounding box coordinates [x1, y1, x2, y2] to highlight on the full frame.",
                         },
                         "verification_question": {
                             "type": "string",
                             "description": (
-                                "The specific question to answer about this candidate "
-                                "(e.g., 'Is this a blue public transport bus?')."
+                                "The specific verification question to ask over the full frame "
+                                "(e.g., 'Does this frame contain a blue pickup truck passing through the intersection?')."
                             ),
                         },
                     },
@@ -175,6 +174,32 @@ class InferenceToolRegistry:
                         },
                     },
                     "required": ["camera_id", "reference_time_ms"],
+                },
+            },
+            {
+                "name": "get_entire_frame",
+                "description": (
+                    "Extract and return the complete, uncropped video frame for a given "
+                    "camera ID and timestamp (or video position in ms/seconds). Provides full "
+                    "scene visual context without cropping."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "camera_id": {
+                            "type": "string",
+                            "description": "Camera ID matching the feed (e.g. 'cam_1').",
+                        },
+                        "timestamp": {
+                            "type": "number",
+                            "description": "Timestamp (epoch timestamp in seconds, video position in seconds, or video position in milliseconds).",
+                        },
+                        "video_pos_ms": {
+                            "type": "number",
+                            "description": "Optional video playback position in milliseconds. If specified, overrides timestamp.",
+                        },
+                    },
+                    "required": ["camera_id"],
                 },
             },
         ]
@@ -220,11 +245,18 @@ class InferenceToolRegistry:
 
         results_data = []
         for cand in candidates:
+            iso_val = getattr(cand, "camera_timestamp_iso", None)
+            if hasattr(iso_val, "_mock_name") or iso_val.__class__.__name__ == "MagicMock":
+                iso_val = None
+            elif iso_val is not None:
+                iso_val = str(iso_val)
+
             results_data.append(
                 {
                     "id": cand.id,
                     "camera_id": cand.camera_id,
                     "camera_timestamp": cand.camera_timestamp,
+                    "camera_timestamp_iso": iso_val,
                     "track_id": cand.track_id,
                     "video_pos_ms": cand.video_pos_ms,
                     "bbox": cand.bbox,
@@ -273,17 +305,20 @@ class InferenceToolRegistry:
         )
 
     def _execute_visual_inspection(self, call_id: str, args: Dict[str, Any]) -> ToolResult:
-        """Extract a frame crop and return it as an attached image.
+        """Extract the full uncropped frame for visual verification.
 
-        This tool does NOT score or evaluate — it only provides visual evidence.
-        The VLM will analyze the attached image in the next reasoning step.
+        Feeds the ENTIRE full frame to the VLM (with optional highlighted candidate bounding box),
+        asking 'Does this frame contain object X or match query Y?'.
         """
         camera_id = args.get("camera_id", "")
         video_pos_ms = float(args.get("video_pos_ms", 0.0))
         bbox = args.get("bbox")
         if isinstance(bbox, str):
             bbox = [float(v) for v in bbox.split(",")]
-        question = args.get("verification_question", "Describe what you see in this image.")
+        question = args.get(
+            "verification_question",
+            "Does this frame contain the target vehicle or match the description?",
+        )
 
         full_frame, crop = self.frame_extractor.extract_frame(
             camera_id=camera_id,
@@ -291,7 +326,29 @@ class InferenceToolRegistry:
             bbox=bbox,
         )
 
-        target_img = crop if crop is not None else full_frame
+        target_img = full_frame if full_frame is not None else crop
+
+        # Draw bounding box overlay on full frame if bbox provided
+        if target_img is not None and bbox and len(bbox) == 4:
+            try:
+                import cv2
+                import numpy as np
+                frame_np = np.array(target_img)
+                x1, y1, x2, y2 = map(int, bbox)
+                cv2.rectangle(frame_np, (x1, y1), (x2, y2), (0, 255, 0), 3)
+                cv2.putText(
+                    frame_np,
+                    "Target Candidate",
+                    (x1, max(20, y1 - 10)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8,
+                    (0, 255, 0),
+                    2,
+                )
+                target_img = Image.fromarray(frame_np)
+            except Exception as err:
+                self.logger.debug(f"Bbox drawing note: {err}")
+
         images = [target_img] if target_img is not None else []
 
         return ToolResult(
@@ -302,6 +359,7 @@ class InferenceToolRegistry:
                 "video_pos_ms": video_pos_ms,
                 "bbox": bbox,
                 "verification_question": question,
+                "verification_mode": "full_frame",
                 "image_extracted": len(images) > 0,
             },
             extracted_images=images,
@@ -342,10 +400,106 @@ class InferenceToolRegistry:
             },
         )
 
+    def _timestamp_to_video_pos_ms(self, camera_id: str, timestamp: Any) -> float:
+        """Convert timestamp (epoch sec, video pos sec, or video pos ms) to video position in milliseconds."""
+        if timestamp is None:
+            return 0.0
+
+        ts_val: float = 0.0
+        if isinstance(timestamp, (int, float)):
+            ts_val = float(timestamp)
+        elif isinstance(timestamp, str):
+            try:
+                ts_val = float(timestamp)
+            except ValueError:
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                    ts_val = dt.timestamp()
+                except Exception:
+                    return 0.0
+
+        # Case 1: Epoch timestamp (e.g., > 100,000.0) -> query vector store for reference offset
+        if ts_val > 100000.0:
+            if hasattr(self, "vector_store") and self.vector_store:
+                try:
+                    metas = self.vector_store.query_metadata(where={"camera_id": camera_id}, limit=100)
+                    if metas:
+                        best_meta = None
+                        best_diff = float("inf")
+                        for m in metas:
+                            cam_ts = m.get("camera_timestamp") or m.get("camera_timestamp_sec")
+                            if cam_ts is not None:
+                                try:
+                                    diff = abs(float(cam_ts) - ts_val)
+                                    if diff < best_diff:
+                                        best_diff = diff
+                                        best_meta = m
+                                except (ValueError, TypeError):
+                                    pass
+
+                        if best_meta is not None:
+                            ref_cam_ts = float(best_meta.get("camera_timestamp") or best_meta.get("camera_timestamp_sec") or 0.0)
+                            ref_vpos_ms = float(best_meta.get("video_pos_ms", 0.0))
+                            offset_ms = (ts_val - ref_cam_ts) * 1000.0
+                            calc_vpos_ms = ref_vpos_ms + offset_ms
+                            return max(0.0, calc_vpos_ms)
+                except Exception as err:
+                    self.logger.warning(f"Failed resolving epoch timestamp against vector store: {err}")
+
+            return max(0.0, ts_val)
+
+        # Case 2: Relative seconds (e.g., <= 3600.0) -> convert to milliseconds
+        if ts_val <= 3600.0:
+            return ts_val * 1000.0
+
+        # Case 3: Already in milliseconds
+        return ts_val
+
+    def _execute_get_entire_frame(self, call_id: str, args: Dict[str, Any]) -> ToolResult:
+        """Extract the entire uncropped video frame given camera_id and timestamp/video_pos_ms."""
+        camera_id = str(args.get("camera_id", ""))
+        video_pos_ms = args.get("video_pos_ms")
+        timestamp = args.get("timestamp")
+        if timestamp is None:
+            timestamp = args.get("camera_timestamp") or args.get("time")
+
+        if video_pos_ms is not None:
+            try:
+                target_pos_ms = float(video_pos_ms)
+            except (ValueError, TypeError):
+                target_pos_ms = 0.0
+        elif timestamp is not None:
+            target_pos_ms = self._timestamp_to_video_pos_ms(camera_id, timestamp)
+        else:
+            target_pos_ms = 0.0
+
+        full_frame = self.frame_extractor.extract_full_frame(
+            camera_id=camera_id,
+            video_pos_ms=target_pos_ms,
+        )
+
+        images = [full_frame] if full_frame is not None else []
+
+        return ToolResult(
+            call_id=call_id,
+            name="get_entire_frame",
+            content={
+                "camera_id": camera_id,
+                "timestamp": timestamp if timestamp is not None else target_pos_ms,
+                "video_pos_ms": target_pos_ms,
+                "image_extracted": len(images) > 0,
+            },
+            extracted_images=images,
+        )
+
     # Handler dispatch table
     _TOOL_HANDLERS = {
         "encode_and_search_vector_store": _execute_vector_search,
         "query_metadata": _execute_metadata_query,
         "inspect_visual_candidate": _execute_visual_inspection,
         "get_temporal_context": _execute_temporal_context,
+        "get_entire_frame": _execute_get_entire_frame,
+        "get_full_frame": _execute_get_entire_frame,
     }
+

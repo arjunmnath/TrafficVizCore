@@ -15,6 +15,7 @@ from pathlib import Path
 workspace_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(workspace_root))
 
+from typing import Any, Dict, List, Optional
 from vlm_retrieval.retrieval.encoder import get_retrieval_encoder
 from vlm_retrieval.retrieval.search import RetrievalEngine, RetrievalResult
 from vlm_retrieval.retrieval.vector_store import VectorStore
@@ -45,11 +46,18 @@ def camera_id_from_clip(clip_name: str) -> str:
     return clip_name
 
 
-def find_crop_path(track_id: int, camera_id: str, camera_timestamp: float) -> str:
+def find_crop_path(track_id: int, camera_id: str, camera_timestamp: float, direct_crop_path: Optional[str] = None) -> str:
     """Locate the local crop path in the workspace matching the metadata."""
+    if direct_crop_path and Path(direct_crop_path).exists():
+        p = Path(direct_crop_path)
+        try:
+            return str(p.relative_to(workspace_root))
+        except ValueError:
+            return str(p)
+
     crops_dir = workspace_root / "reid" / "v1" / str(track_id)
     if not crops_dir.exists():
-        return "Not found"
+        return direct_crop_path or "Not found"
 
     for p in crops_dir.iterdir():
         if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}:
@@ -65,7 +73,7 @@ def find_crop_path(track_id: int, camera_id: str, camera_timestamp: float) -> st
                         return str(p.relative_to(workspace_root))
                     except ValueError:
                         return str(p)
-    return "Not found"
+    return direct_crop_path or "Not found"
 
 
 def parse_args():
@@ -86,10 +94,16 @@ def parse_args():
         help="Number of results to retrieve (default: 10)",
     )
     parser.add_argument(
+        "--db_path",
+        type=str,
+        default="artifacts/cctv_vlm.db",
+        help="Path to SQL database file (default: artifacts/cctv_vlm.db)",
+    )
+    parser.add_argument(
         "--collection",
         type=str,
         default="track_events",
-        help="ChromaDB collection name (default: track_events)",
+        help="ChromaDB / collection name filter",
     )
     parser.add_argument(
         "--no-filters",
@@ -152,9 +166,9 @@ def print_results(query: str, parsed_query, results: list[RetrievalResult]) -> N
 
     for rank, r in enumerate(results, start=1):
         bar = _similarity_bar(r.distance)
-        ts = _fmt_timestamp(r.camera_timestamp)
+        ts = getattr(r, "camera_timestamp_iso", None) or _fmt_timestamp(r.camera_timestamp)
         bbox_str = f"  bbox={r.bbox}" if r.bbox else ""
-        crop_path = find_crop_path(r.track_id, r.camera_id, r.camera_timestamp)
+        crop_path = find_crop_path(r.track_id, r.camera_id, r.camera_timestamp, direct_crop_path=getattr(r, "crop_path", None))
 
         print(f"\n  {_BOLD}#{rank:<3}{_RESET}  {_GREEN}ID:{_RESET} {r.id}")
         print(
@@ -177,7 +191,7 @@ def show_results_grid(results: list[RetrievalResult], query: str) -> None:
     # Collect all valid image paths
     valid_paths = []
     for r in results:
-        crop_path = find_crop_path(r.track_id, r.camera_id, r.camera_timestamp)
+        crop_path = find_crop_path(r.track_id, r.camera_id, r.camera_timestamp, direct_crop_path=getattr(r, "crop_path", None))
         if crop_path != "Not found":
             p = workspace_root / crop_path
             if p.exists():
@@ -347,10 +361,10 @@ def main():
     logger.info(f"Initializing retrieval encoder '{args.retrieval_model}'...")
     encoder = get_retrieval_encoder(model_name=args.retrieval_model, device=args.device)
 
-    logger.info(f"Connecting to ChromaDB collection '{args.collection}'...")
-    vector_store = VectorStore(collection_name=args.collection)
+    logger.info(f"Connecting to SQL VectorStore database '{args.db_path}'...")
+    vector_store = VectorStore(db_path=args.db_path)
 
-    logger.info(f"Collection has {vector_store.get_event_count()} indexed embeddings.")
+    logger.info(f"Database store has {vector_store.get_event_count()} indexed embeddings.")
 
     engine = RetrievalEngine(
         encoder=encoder,

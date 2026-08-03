@@ -16,15 +16,12 @@ def run_vlm_retrieval(config: VLMRetrievalConfig, query_text: str | None = None)
     logger.info("Starting Agentic VLM Retrieval Engine")
     logger.info(f"Retrieval model: {config.retrieval_model}")
     logger.info(f"Reasoning model: {config.reasoning_model}")
-    logger.info(f"NPZ Dir/Path: {config.npz_dir or config.npz_path}")
-    logger.info(f"Tracks JSON Path: {config.json_path}")
+    logger.info(f"Database DB Path: {config.db_path}")
     logger.info(f"Video sources: {config.video_sources}")
 
-    logger.info("Connecting to VectorStore via NPZ & Tracks JSON...")
+    logger.info(f"Connecting to SQL VectorStore database at '{config.db_path}'...")
     vector_store = VectorStore(
-        npz_dir=config.npz_dir,
-        npz_path=config.npz_path,
-        json_path=config.json_path,
+        db_path=config.db_path,
     )
 
     logger.info(f"Loading retrieval encoder '{config.retrieval_model}'...")
@@ -91,9 +88,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="CCTV Agentic Planning VLM Retrieval Engine")
     parser.add_argument("--query", type=str, default=None, help="Natural language query to execute.")
-    parser.add_argument("--npz_dir", type=str, default=None, help="Directory containing .npz embedding files.")
-    parser.add_argument("--npz_path", type=str, default=None, help="Path to single .npz embeddings file.")
-    parser.add_argument("--json_path", type=str, default=None, help="Path to accompanying tracks .json metadata file.")
+    parser.add_argument("--db_path", type=str, default="artifacts/cctv_vlm.db", help="Path to SQL database file.")
     parser.add_argument(
         "--retrieval_model",
         type=str,
@@ -128,9 +123,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config = VLMRetrievalConfig(
-        npz_dir=args.npz_dir,
-        npz_path=args.npz_path,
-        json_path=args.json_path,
+        db_path=args.db_path,
         retrieval_model=args.retrieval_model,
         reasoning_model=args.reasoning_model,
         video_sources=json.loads(args.video_sources),

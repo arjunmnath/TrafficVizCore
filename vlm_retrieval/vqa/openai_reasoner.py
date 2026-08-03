@@ -101,9 +101,21 @@ class OpenAIAgenticReasoner(BaseAgenticVLMReasoner):
             try:
                 with urllib.request.urlopen(req) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as http_err:
+                error_body = ""
+                try:
+                    error_body = http_err.read().decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+                if http_err.code == 429:
+                    err_msg = f"API Rate Limit / Quota Exceeded (HTTP 429): {error_body[:500]}"
+                else:
+                    err_msg = f"OpenAI API Error HTTP {http_err.code} ({http_err.reason}): {error_body[:500]}"
+                self.logger.error(err_msg)
+                raise RuntimeError(f"Terminating execution: {err_msg}") from http_err
             except Exception as err:
                 self.logger.error(f"OpenAI API call failed at step {step_idx}: {err}")
-                raise RuntimeError(f"OpenAI API call failed: {err}") from err
+                raise RuntimeError(f"Terminating execution due to OpenAI API failure: {err}") from err
 
             choice = data["choices"][0]["message"]
             thought = choice.get("content") or ""

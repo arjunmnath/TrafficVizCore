@@ -34,26 +34,22 @@ except Exception:
 class GeminiAgenticReasoner(BaseAgenticVLMReasoner):
     """API-based VLM Reasoner using Gemini with function calling and vision."""
 
-    def __init__(self, model_name: str = "gemini-3.5-flash", api_key: Optional[str] = None) -> None:
+    def __init__(self, model_name: str = "gemini-2.0-flash", api_key: Optional[str] = None) -> None:
         self.logger = setup_logger("GeminiAgenticReasoner")
         self.model_name = model_name
         self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
 
         m_lower = model_name.lower()
-        if "gemini-3.5" in m_lower or "3.5" in m_lower:
-            self.api_model = "gemini-3.5-flash"
-        elif "gemini-3.1" in m_lower or "3.1" in m_lower:
-            self.api_model = "gemini-3.1-pro-preview"
-        elif "gemini-flash-latest" in m_lower:
-            self.api_model = "gemini-flash-latest"
-        elif "gemini-2.5" in m_lower:
-            self.api_model = "gemini-2.5-flash"
-        elif "gemini-1.5-pro" in m_lower:
+        if "2.0-flash" in m_lower or "2.0" in m_lower:
+            self.api_model = "gemini-2.0-flash"
+        elif "1.5-pro" in m_lower:
             self.api_model = "gemini-1.5-pro"
+        elif "1.5-flash" in m_lower:
+            self.api_model = "gemini-1.5-flash"
         elif "gemini" in m_lower:
             self.api_model = model_name
         else:
-            self.api_model = "gemini-3.5-flash"
+            self.api_model = "gemini-2.0-flash"
 
     def plan_and_execute(
         self,
@@ -122,34 +118,22 @@ class GeminiAgenticReasoner(BaseAgenticVLMReasoner):
             try:
                 with urllib.request.urlopen(req) as resp:
                     response = resp.read().decode("utf-8")
-                    with open('reasoning.txt', 'a+') as f:
-                        f.write(json.dumps(json.loads(response), indent=4))
                     data = json.loads(response)
             except urllib.error.HTTPError as http_err:
-                # Read the response body for actionable error details
                 error_body = ""
                 try:
                     error_body = http_err.read().decode("utf-8", errors="replace")
                 except Exception:
                     pass
-                self.logger.error(
-                    f"Gemini API HTTP {http_err.code} at step {step_idx}: "
-                    f"{http_err.reason}\nResponse: {error_body[:1000]}"
-                )
-                if http_err.code == 403:
-                    raise RuntimeError(
-                        f"Gemini API returned 403 Forbidden. Check that:\n"
-                        f"  1. Your GEMINI_API_KEY / GOOGLE_API_KEY is valid\n"
-                        f"  2. The Generative Language API is enabled in your Google Cloud project\n"
-                        f"  3. The model '{self.api_model}' is available for your API key\n"
-                        f"API response: {error_body[:500]}"
-                    ) from http_err
-                raise RuntimeError(
-                    f"Gemini API call failed (HTTP {http_err.code}): {error_body[:500]}"
-                ) from http_err
+                if http_err.code == 429:
+                    err_msg = f"API Rate Limit / Quota Exceeded (HTTP 429): {error_body[:500]}"
+                else:
+                    err_msg = f"Gemini API Error HTTP {http_err.code} ({http_err.reason}): {error_body[:500]}"
+                self.logger.error(err_msg)
+                raise RuntimeError(f"Terminating execution: {err_msg}") from http_err
             except Exception as err:
                 self.logger.error(f"Gemini API call failed at step {step_idx}: {err}")
-                raise RuntimeError(f"Gemini API call failed: {err}") from err
+                raise RuntimeError(f"Terminating execution due to Gemini API failure: {err}") from err
 
             candidates = data.get("candidates", [])
             if not candidates:

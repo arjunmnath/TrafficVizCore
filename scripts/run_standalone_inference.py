@@ -51,7 +51,7 @@ console = Console()
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Standalone serverless CCTV inference script using .npz embeddings and registry metadata."
+        description="Standalone serverless CCTV VLM inference script querying cctv_vlm.db SQL database."
     )
     parser.add_argument(
         "query",
@@ -61,34 +61,22 @@ def parse_args():
         help="Natural language query describing target object or person (default: 'a blue public transport bus').",
     )
     parser.add_argument(
-        "--npz_path",
+        "--db_path",
         type=str,
-        required=True,
-        help="Path to .npz embeddings file.",
-    )
-    parser.add_argument(
-        "--npz_dir",
-        type=str,
-        default=None,
-        help="Directory containing .npz embedding files.",
-    )
-    parser.add_argument(
-        "--json_path",
-        type=str,
-        required=True,
-        help="Path to registry JSON metadata file.",
+        default="artifacts/cctv_vlm.db",
+        help="Path to SQL database file (default: artifacts/cctv_vlm.db).",
     )
     parser.add_argument(
         "--retrieval_model",
         type=str,
-        default="google/siglip2-so400m-patch14-384",
-        help="Retrieval encoder model name.",
+        default="openai/clip-vit-large-patch14",
+        help="Retrieval encoder model name (default: openai/clip-vit-large-patch14).",
     )
     parser.add_argument(
         "--reasoning_model",
         type=str,
         default="Qwen/Qwen3-VL-8B-Instruct",
-        help="VLM reasoning model for agentic mode (e.g. 'Qwen/Qwen3-VL-8B-Instruct', 'gemini-2.5-flash', 'openai-5.6').",
+        help="VLM reasoning model for agentic mode (e.g. 'Qwen/Qwen3-VL-8B-Instruct', 'gemini-2.0-flash', 'openai-5.6').",
     )
     parser.add_argument(
         "--top_k",
@@ -164,25 +152,16 @@ def run_direct_inference(args, vector_store: VectorStore) -> List[Dict[str, Any]
     table.add_column("Class Label", style="blue", justify="center")
 
     for rank, res in enumerate(results, start=1):
-        # Look up extra details from vector store record
-        rec_info = None
-        if vector_store.conn_type == "npz":
-            for rec in vector_store.npz_records:
-                if rec["id"] == res.id:
-                    rec_info = rec
-                    break
-
-        meta = rec_info["metadata"] if rec_info else {}
-        class_lbl = meta.get("class_label", "object")
-        st_time = meta.get("start_time", res.camera_timestamp)
-        end_time = meta.get("end_time", st_time)
+        st_time = res.camera_timestamp
+        end_time = st_time
+        class_lbl = getattr(res, "class_label", "object")
 
         table.add_row(
             str(rank),
             res.id,
             res.camera_id,
             str(res.track_id),
-            f"{st_time:.2f}s - {end_time:.2f}s ({res.video_pos_ms:.0f}ms)",
+            f"{st_time:.2f}s ({res.video_pos_ms:.0f}ms)",
             f"{res.distance:.4f}",
             class_lbl,
         )
@@ -192,20 +171,15 @@ def run_direct_inference(args, vector_store: VectorStore) -> List[Dict[str, Any]
             "id": res.id,
             "camera_id": res.camera_id,
             "track_id": res.track_id,
-            "global_id": meta.get("global_id", res.track_id),
+            "global_id": getattr(res, "raw_track_id", res.track_id),
             "camera_timestamp": res.camera_timestamp,
+            "camera_timestamp_iso": getattr(res, "camera_timestamp_iso", None),
             "video_pos_ms": res.video_pos_ms,
             "start_time": st_time,
             "end_time": end_time,
             "distance": res.distance,
             "class_label": class_lbl,
-            "retrieval_embedding": rec_info.get("retrieval_embedding") if rec_info else None,
-            "appearance_embedding": rec_info.get("appearance_embedding") if rec_info else None,
-            "track_details": meta.get("track_details") or {
-                "compressed_track": meta.get("compressed_track"),
-                "trajectory": meta.get("trajectory"),
-                "occurrences": meta.get("occurrences"),
-            },
+            "crop_path": getattr(res, "crop_path", None),
         })
 
     console.print("\n")
@@ -463,16 +437,10 @@ def main():
     console.print("└────────────────────────────────────────────────────────────┘\n")
 
     # Connect VectorStore
-    if args.npz_dir or args.npz_path:
-        console.print(f"[bold cyan]Connecting to NPZ Vector Store:[/bold cyan] npz_dir={args.npz_dir}, npz_path={args.npz_path}, json_path={args.json_path}")
-        vector_store = VectorStore(
-            npz_dir=args.npz_dir,
-            npz_path=args.npz_path,
-            json_path=args.json_path,
-        )
-    else:
-        console.print("[bold cyan]Connecting to default Vector Store...[/bold cyan]")
-        vector_store = VectorStore()
+    console.print(f"[bold cyan]Connecting to SQL Database Vector Store:[/bold cyan] db_path={args.db_path}")
+    vector_store = VectorStore(
+        db_path=args.db_path,
+    )
 
     console.print(f"[bold green]Store Connection Type:[/bold green] '{vector_store.conn_type}'")
     console.print(f"[bold green]Total Events Indexed:[/bold green] {vector_store.get_event_count()}\n")

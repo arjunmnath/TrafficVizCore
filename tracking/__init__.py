@@ -25,6 +25,7 @@ from tracking.compression import (
 from tracking.serialization import JsonSerializer, JsonDeserializer
 from tracking.fusion import FusionTrackAdapter
 from tracking.visualization import TrajectoryRenderer
+from tracking.comparison import TrackComparator, compare_tracks, TrackSimilarityResult
 
 __all__ = [
     "CompressedTrack",
@@ -51,4 +52,7 @@ __all__ = [
     "JsonDeserializer",
     "FusionTrackAdapter",
     "TrajectoryRenderer",
+    "TrackComparator",
+    "compare_tracks",
+    "TrackSimilarityResult",
 ]

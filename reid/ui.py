@@ -164,6 +164,8 @@ class RichUIListener(ReIDPipelineListener):
         fps: float,
         registry: SimpleRegistry,
         log_message: str | None = None,
+        step: int = 1,
+        **kwargs,
     ):
         video_idx = self.current_video_idx
         total_videos = len(self.video_paths)
@@ -563,6 +565,8 @@ class HeadlessUIListener(ReIDPipelineListener):
         fps: float,
         registry: SimpleRegistry,
         log_message: str | None = None,
+        step: int = 1,
+        **kwargs,
     ):
         video_idx = self.current_video_idx
         total_videos = len(self.video_paths)

@@ -60,28 +60,16 @@ def parse_args():
         help="Run a single query and exit. If omitted, launches interactive shell session.",
     )
     parser.add_argument(
-        "--npz_path",
+        "--db_path",
         type=str,
-        required=True,
-        help="Path to .npz embeddings file.",
-    )
-    parser.add_argument(
-        "--npz_dir",
-        type=str,
-        default=None,
-        help="Directory containing .npz embedding files.",
-    )
-    parser.add_argument(
-        "--json_path",
-        type=str,
-        required=True,
-        help="Path to registry JSON metadata file.",
+        default="artifacts/cctv_vlm.db",
+        help="Path to SQL database file (default: artifacts/cctv_vlm.db).",
     )
     parser.add_argument(
         "--retrieval_model",
         type=str,
-        default="google/siglip2-so400m-patch14-384",
-        help="Retrieval encoder model name.",
+        default="openai/clip-vit-large-patch14",
+        help="Retrieval encoder model name (default: openai/clip-vit-large-patch14).",
     )
     parser.add_argument(
         "--reasoning_model",
@@ -151,24 +139,16 @@ def execute_direct_query(
     table.add_column("Class Label", style="blue", justify="center")
 
     for rank, res in enumerate(results, start=1):
-        rec_info = None
-        if vector_store.conn_type == "npz":
-            for rec in vector_store.npz_records:
-                if rec["id"] == res.id:
-                    rec_info = rec
-                    break
-
-        meta = rec_info["metadata"] if rec_info else {}
-        class_lbl = meta.get("class_label", "object")
-        st_time = meta.get("start_time", res.camera_timestamp)
-        end_time = meta.get("end_time", st_time)
+        st_time = res.camera_timestamp
+        end_time = st_time
+        class_lbl = getattr(res, "class_label", "object")
 
         table.add_row(
             str(rank),
             res.id,
             res.camera_id,
             str(res.track_id),
-            f"{st_time:.2f}s - {end_time:.2f}s",
+            f"{st_time:.2f}s",
             f"{res.distance:.4f}",
             class_lbl,
         )
@@ -178,13 +158,15 @@ def execute_direct_query(
             "id": res.id,
             "camera_id": res.camera_id,
             "track_id": res.track_id,
-            "global_id": meta.get("global_id", res.track_id),
+            "global_id": getattr(res, "raw_track_id", res.track_id),
             "camera_timestamp": res.camera_timestamp,
+            "camera_timestamp_iso": getattr(res, "camera_timestamp_iso", None),
             "video_pos_ms": res.video_pos_ms,
             "start_time": st_time,
             "end_time": end_time,
             "distance": res.distance,
             "class_label": class_lbl,
+            "crop_path": getattr(res, "crop_path", None),
         })
 
     console.print("\n")
@@ -262,7 +244,7 @@ def main():
     console.print(
         Panel.fit(
             "[bold cyan]CCTV Semantic Search & Agentic VLM Interactive Shell[/bold cyan]\n"
-            f"[dim]Store Path: {args.npz_path or args.npz_dir or 'Default'}\n"
+            f"[dim]Database Path: {args.db_path}\n"
             f"Retrieval Model: {args.retrieval_model} | Reasoning Model: {args.reasoning_model}\n"
             f"Mode: {args.mode} | Top K: {args.top_k} | Device: {args.device}[/dim]",
             box=box.ROUNDED,
@@ -271,11 +253,9 @@ def main():
     )
 
     # 1. Load VectorStore
-    console.print(f"[bold cyan]Connecting to VectorStore...[/bold cyan]")
+    console.print(f"[bold cyan]Connecting to SQL VectorStore ('{args.db_path}')...[/bold cyan]")
     vector_store = VectorStore(
-        npz_dir=args.npz_dir,
-        npz_path=args.npz_path,
-        json_path=args.json_path,
+        db_path=args.db_path,
     )
     console.print(f"[bold green]Store Connection Type:[/bold green] '{vector_store.conn_type}'")
     console.print(f"[bold green]Total Events Indexed:[/bold green] {vector_store.get_event_count()}\n")

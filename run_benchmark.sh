@@ -2,14 +2,15 @@
 
 mkdir -p artifacts
 
-rm artifacts/crops
-rm artifacts/registry.*
+rm -rf artifacts/crops
+rm -f artifacts/registry.*
+rm -f artifacts/cctv_vlm.db
 
 
 # stage 1: ingest video feed produces -> reid embeddings + compressed tracks + other metadata
 poetry run python scripts/run_reid_pipeline.py \
---reid_model_type resnetibnreid \
---dir input_vids \
+--reid_model_type vitclipreid \
+--dir dataset/S02 \
 --output artifacts/registry.tracks.models.json \
 --output_npz artifacts/registry.reid.embeddings.npz \
 --device mps \
@@ -27,7 +28,7 @@ poetry run python scripts/match_multicamera.py \
 # stage 3: takes the compressed track details and produced the crops of each tracks
 poetry run python scripts/crop_tracks.py \
 --registry artifacts/registry.tracks.models.json \
---video-dir input_vids \
+--video-dir dataset/S02 \
 --output-dir artifacts/crops
 
 # stage 4: takes the crops, runs visual encoder and produces retrieval embeddings + final identities 
@@ -39,7 +40,14 @@ poetry run python scripts/produce_retrieval_embeddings.py \
 --output_json artifacts/registry.tracks.identities.json \
 --target_k 3
 
-# stage 5: compile everything into a sqlite database
+# stage 5: compile everything into a sqlite database with S02 ground truths
 poetry run python scripts/build_cctv_database.py \
 --artifacts_dir artifacts \
---output_db artifacts/cctv_vlm.db
+--output_db artifacts/cctv_vlm.db \
+--test_tracks_json dataset/tracks.json
+
+# stage 6: run NL retrieval benchmark against the compiled database ground truths
+poetry run python scripts/benchmark_nl_retrieval.py \
+--queries_file dataset/tracks.json \
+--db_path artifacts/cctv_vlm.db \
+--top_k 10

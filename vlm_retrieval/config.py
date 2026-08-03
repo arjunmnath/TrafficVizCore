@@ -3,9 +3,7 @@ from typing import Dict, Optional
 
 
 class VLMRetrievalConfig(BaseModel):
-    npz_dir: Optional[str] = None
-    npz_path: Optional[str] = None
-    json_path: Optional[str] = None
+    db_path: str = "artifacts/cctv_vlm.db"
 
     retrieval_model: str = "google/siglip2-so400m-patch14-384"
     reasoning_model: str = (
