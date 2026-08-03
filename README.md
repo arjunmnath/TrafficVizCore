@@ -116,10 +116,33 @@ poetry run python -m vlm_retrieval.main \
 
 ## Evaluation & Benchmarking
 
+### 1. ReID Pipeline Benchmark
 Evaluate end-to-end tracking and ReID performance (**Rank-1**, **mAP**, **mINP**, **IDF1**, **HOTA**, **DetA**, **AssA**) against ground truth annotations on **Scene 6 (`dataset/test/S06`)**:
 
 ```bash
-PYTHONPATH=. poetry run python scripts/evaluate_system.py --device auto
+PYTHONPATH=. poetry run python scripts/benchmark_reid_pipeline.py --device auto
+```
+
+### 2. VLM Retrieval & Reranking Benchmark
+Evaluate two-stage VLM retrieval and reranking performance (**Recall@1/5/10/20**, **MRR**, **mAP**) using model artifacts and dataset ground truth on the **AICity23 Track 2 NL Retrieval Dataset**:
+
+```bash
+# Step 0 (Optional): Extract img1/%06d.jpg frame images from video feeds
+PYTHONPATH=. poetry run python scripts/extract_aicity_frames.py --data_root AICity23_Track2_NL_Retrieval/data
+
+# Step 1: Prepare simplified intermediate ground truth representation
+PYTHONPATH=. poetry run python scripts/prepare_vlm_ground_truth.py \
+    --npz_path artifacts/registry.retrieval.embeddings.npz \
+    --json_path artifacts/registry.tracks.identities.json \
+    --dataset_dir AICity23_Track2_NL_Retrieval/data \
+    --output_gt artifacts/vlm_benchmark_gt.json
+
+# Step 2: Run VLM retrieval and reranking benchmark against model artifacts
+PYTHONPATH=. poetry run python scripts/benchmark_vlm_retrieval.py \
+    --npz_path artifacts/registry.retrieval.embeddings.npz \
+    --json_path artifacts/registry.tracks.identities.json \
+    --gt_json artifacts/vlm_benchmark_gt.json \
+    --retrieval_model google/siglip2-so400m-patch14-384
 ```
 
 ---

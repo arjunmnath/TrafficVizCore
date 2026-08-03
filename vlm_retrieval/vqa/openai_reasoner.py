@@ -125,6 +125,7 @@ class OpenAIAgenticReasoner(BaseAgenticVLMReasoner):
                 step_number=step_idx,
                 thought=thought or f"Step {step_idx}: processing...",
             )
+            self._log_raw_response(step_idx, step.thought)
 
             # If no tool calls → this is the final answer
             if not tool_calls_raw:
@@ -224,6 +225,7 @@ class OpenAIAgenticReasoner(BaseAgenticVLMReasoner):
                         step_number=len(trajectory) + 1,
                         thought=forced_text.strip(),
                     )
+                    self._log_raw_response(forced_step.step_number, forced_text.strip())
                     trajectory.append(forced_step)
                     self.logger.info("Received forced final answer from OpenAI.")
             except Exception as err:

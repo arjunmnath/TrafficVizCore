@@ -9,14 +9,15 @@ rm -f artifacts/cctv_vlm.db
 
 # stage 1: ingest video feed produces -> reid embeddings + compressed tracks + other metadata
 poetry run python scripts/run_reid_pipeline.py \
---reid_model_type vitclipreid \
+--reid_model_type resnetibnreid \
 --dir dataset/S02 \
 --output artifacts/registry.tracks.models.json \
 --output_npz artifacts/registry.reid.embeddings.npz \
---device mps \
+--device cuda \
 --fp16 \
 --tracker bytetrackx.yaml \
---intra-camera-threshold 0.6
+--intra-camera-threshold 0.6 \
+--headless
 
 # stage 2: takes the reid embeddings and produces global matches across all cameras
 poetry run python scripts/match_multicamera.py \
