@@ -141,34 +141,35 @@ def resolve_model_weights(model_path: str) -> str:
         return os.path.abspath(model_path)
 
     # Determine workspace root (where the 'reid' directory and 'trained_model' reside)
-    # Since reid/utils.py is at <workspace_root>/reid/utils.py, its parent is the workspace root.
     utils_dir = os.path.dirname(os.path.abspath(__file__))
     workspace_root = os.path.dirname(utils_dir)
 
-    # Try resolving directly under workspace_root/trained_model
-    resolved_path = os.path.join(workspace_root, "trained_model", model_path)
-    if os.path.exists(resolved_path):
-        return resolved_path
-
-    # Try resolving if model_path already includes trained_model/ or trained_models/ prefix
+    # 1. Check direct join with workspace root (handles trained_model/xxx or custom relative paths)
     resolved_direct = os.path.join(workspace_root, model_path)
     if os.path.exists(resolved_direct):
         return resolved_direct
 
-    # If the user passed "trained_models/yolov8s.pt", and the directory is actually "trained_model"
+    # 2. Normalize trained_models/ -> trained_model/
     normalized_path = model_path
     if normalized_path.startswith("trained_models/"):
         normalized_path = normalized_path.replace("trained_models/", "trained_model/", 1)
-        resolved_normalized = os.path.join(workspace_root, normalized_path)
-        if os.path.exists(resolved_normalized):
-            return resolved_normalized
+        resolved_norm = os.path.join(workspace_root, normalized_path)
+        if os.path.exists(resolved_norm):
+            return resolved_norm
 
-    # If it is just a filename and is not found under trained_model, try to search it
-    # in trained_model by taking the basename
+    # 3. Try under workspace_root/trained_model if normalized_path does not already start with trained_model/
+    if not normalized_path.startswith("trained_model/"):
+        resolved_under = os.path.join(workspace_root, "trained_model", normalized_path)
+        if os.path.exists(resolved_under):
+            return resolved_under
+
+    # 4. Try searching by basename under workspace_root/trained_model
     basename = os.path.basename(model_path)
     resolved_basename = os.path.join(workspace_root, "trained_model", basename)
     if os.path.exists(resolved_basename):
         return resolved_basename
 
-    # Fallback to the join of workspace_root and trained_model/model_path
-    return os.path.abspath(os.path.join(workspace_root, "trained_model", model_path))
+    # 5. Clean fallback without duplicating trained_model/
+    if normalized_path.startswith("trained_model/"):
+        return os.path.abspath(os.path.join(workspace_root, normalized_path))
+    return os.path.abspath(os.path.join(workspace_root, "trained_model", normalized_path))
