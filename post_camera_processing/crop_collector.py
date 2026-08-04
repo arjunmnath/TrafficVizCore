@@ -231,13 +231,19 @@ class CropCollector:
         self, filename: str, fallback_track_id: str
     ) -> tuple[str, int, float]:
         """Parses camera ID, frame index, and timestamp from crop filename conventions."""
-        camera_id = "cam_1"
+        camera_id = "c001"
         frame_idx = 0
         timestamp_sec = 0.0
 
-        cam_match = re.search(r"clip(\d+)", fallback_track_id + "_" + filename)
+        full_str = fallback_track_id + "_" + filename
+        cam_match = re.search(r"(c\d{3}|c\d+)", full_str)
         if cam_match:
-            camera_id = f"cam_{cam_match.group(1)}"
+            camera_id = cam_match.group(1)
+        else:
+            clip_match = re.search(r"clip(\d+)", full_str)
+            if clip_match:
+                num = int(clip_match.group(1))
+                camera_id = f"c{num:03d}"
 
         frame_match = re.search(r"frame_(\d+)", filename)
         if frame_match:
@@ -255,11 +261,8 @@ class CropCollector:
         return camera_id, frame_idx, timestamp_sec
 
     def _extract_track_id_from_filename(self, filename: str) -> str:
-        """Extracts track ID prefix from flat filenames like 'clip1.mp4_12_frame_001.jpg'."""
-        match = re.search(r"^(clip\d+\.mp4_\d+)", filename)
+        """Extracts track ID prefix from flat filenames like 'c001.mp4_12_frame_001.jpg' or 'c006_vdo.avi_12_frame_001.jpg'."""
+        match = re.search(r"^([a-zA-Z0-9_\.]+\.mp4_\d+|[a-zA-Z0-9_\.]+\.avi_\d+|clip\d+\.mp4_\d+|c\d+_\d+)", filename)
         if match:
             return match.group(1)
-        stem = Path(filename).stem
-        if "_frame_" in stem:
-            return stem.split("_frame_")[0]
-        return stem
+        return filename.split("_frame_")[0] if "_frame_" in filename else filename.rsplit(".", 1)[0]

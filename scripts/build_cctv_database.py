@@ -48,12 +48,15 @@ def format_iso_timestamp(offset_sec: float) -> str:
 
 
 def camera_id_from_clip(video_name: str) -> str:
-    """Derive camera identifier from clip stem (e.g. 'clip1.mp4' -> 'cam_1')."""
-    stem = video_name.replace(".mp4", "")
-    if stem.startswith("clip"):
-        num = stem[4:]
-        if num.isdigit():
-            return f"cam_{num}"
+    """Derive camera identifier from clip stem or name (e.g. 'c001.mp4' -> 'c001', 'c006_vdo.avi' -> 'c006')."""
+    stem = video_name.replace(".mp4", "").replace(".avi", "")
+    match_c = re.search(r"(c\d{3}|c\d+)", stem)
+    if match_c:
+        return match_c.group(1)
+    match_clip = re.search(r"clip(\d+)", stem)
+    if match_clip:
+        num = int(match_clip.group(1))
+        return f"c{num:03d}"
     return stem
 
 
@@ -177,13 +180,26 @@ def process_video_clips(
     """
     video_names = set()
 
-    # Discover videos from input_vids or artifacts metadata
+    # Discover videos from input_vids
     input_vids_dir = workspace_root / "input_vids"
     if input_vids_dir.exists():
-        for f in input_vids_dir.glob("*.mp4"):
-            video_names.add(f.name)
+        for f in input_vids_dir.glob("*.*"):
+            if f.suffix.lower() in [".mp4", ".avi", ".mkv", ".mov"]:
+                video_names.add(f.name)
 
-    # Check identities / models json files for extra video clip names
+    # Check models json file for feed keys
+    models_json = artifacts_dir / "registry.tracks.models.json"
+    if models_json.exists():
+        try:
+            with open(models_json, "r") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    for k in data.keys():
+                        video_names.add(k)
+        except Exception as e:
+            logger.warning(f"Error parsing models JSON for videos: {e}")
+
+    # Check identities json file for video clip names
     identities_json = artifacts_dir / "registry.tracks.identities.json"
     if identities_json.exists():
         try:
@@ -193,15 +209,22 @@ def process_video_clips(
                     if isinstance(item, dict):
                         for tid in item.get("track_ids", []):
                             if isinstance(tid, str) and "_" in tid:
-                                v_name = tid.split("_")[0]
-                                if v_name.endswith(".mp4"):
-                                    video_names.add(v_name)
+                                v_name = tid.rsplit("_", 1)[0]
+                                video_names.add(v_name)
         except Exception as e:
             logger.warning(f"Error parsing identities JSON for videos: {e}")
 
+    # Discover crops directories under artifacts/crops/
+    crops_dir = artifacts_dir / "crops"
+    if crops_dir.exists():
+        for d in crops_dir.iterdir():
+            if d.is_dir() and "_" in d.name:
+                v_name = d.name.rsplit("_", 1)[0]
+                video_names.add(v_name)
+
     # Fallback to default clip names if none discovered
     if not video_names:
-        video_names = {"clip1.mp4", "clip2.mp4"}
+        video_names = {"c001.mp4", "c002.mp4"}
 
     sorted_videos = sorted(list(video_names))
     video_offsets: Dict[str, Tuple[int, str, float]] = {}
@@ -453,10 +476,11 @@ def build_cctv_database(
                     cls_lbl = str(prof.get("class_label", "vehicle"))
 
                     for raw_tid in track_ids:
-                        v_name = "clip1.mp4"
+                        raw_str = str(raw_tid)
+                        v_name = "c001.mp4"
                         tid = 0
-                        if "_" in str(raw_tid):
-                            parts = str(raw_tid).split("_")
+                        if "_" in raw_str:
+                            parts = raw_str.rsplit("_", 1)
                             v_name = parts[0]
                             if len(parts) > 1 and parts[1].isdigit():
                                 tid = int(parts[1])
@@ -467,7 +491,7 @@ def build_cctv_database(
                         st_iso, st_sec = get_abs_timestamps(v_name, st_rel)
                         end_iso, end_sec = get_abs_timestamps(v_name, end_rel)
 
-                        t_doc_id = f"{v_name}_{tid}"
+                        t_doc_id = raw_str
                         cursor.execute(
                             """
                             INSERT OR REPLACE INTO tracks (

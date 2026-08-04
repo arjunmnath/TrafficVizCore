@@ -52,6 +52,45 @@ def find_video_file(video_dir: Path, feed_name: str) -> Path | None:
     for candidate in candidates:
         if candidate.exists() and candidate.is_file():
             return candidate
+
+    # Check camera subfolder (e.g. feed_name="c006_vdo.avi" -> video_dir/c006/vdo.avi)
+    if "_" in feed_name:
+        parts = feed_name.split("_", 1)
+        cam_folder, v_name = parts[0], parts[1]
+        c1 = video_dir / cam_folder / v_name
+        if c1.exists() and c1.is_file():
+            return c1
+
+        sub_dir = video_dir / cam_folder
+        if sub_dir.exists() and sub_dir.is_dir():
+            for ext in ["vdo.avi", "vdo.mp4", "vdo.mkv", "*.avi", "*.mp4", "*.mkv"]:
+                matches = list(sub_dir.glob(ext))
+                if matches:
+                    return matches[0]
+
+    # Check if feed_name itself is a subfolder
+    sub_dir = video_dir / feed_name
+    if sub_dir.exists() and sub_dir.is_dir():
+        for ext in ["vdo.avi", "vdo.mp4", "vdo.mkv", "*.avi", "*.mp4", "*.mkv"]:
+            matches = list(sub_dir.glob(ext))
+            if matches:
+                return matches[0]
+
+    # Recursive search: match parent folder name or target filename
+    cam_prefix = feed_name.split("_")[0] if "_" in feed_name else None
+    target_filename = Path(feed_name).name
+
+    for root, _, files in os.walk(video_dir):
+        root_path = Path(root)
+        for f in files:
+            f_path = root_path / f
+            if f_path.suffix.lower() not in [".mp4", ".avi", ".mkv", ".mov"]:
+                continue
+            if cam_prefix and cam_prefix == root_path.name:
+                return f_path
+            if f == target_filename:
+                return f_path
+
     return None
 
 
@@ -94,7 +133,7 @@ def produce_crops(
                 console.print(f"[yellow]Warning:[/yellow] Could not deserialize track in {feed_name}: {e}")
                 continue
 
-            camera_feed = track.metadata.camera_id or feed_name
+            camera_feed = feed_name
             tracks_by_feed[camera_feed].append(track)
             track_count += 1
 
