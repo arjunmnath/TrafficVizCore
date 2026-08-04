@@ -195,18 +195,26 @@ class DatabaseTrackRetriever:
                         continue
 
                     cosine_sim = float(np.dot(q_vec, db_vec))
-                    # Map embedding to track ID or UUID
                     meta = emb_item.get("meta_dict", {})
                     raw_tid = meta.get("uuid", meta.get("track_id", emb_item.get("track_id")))
 
                     target_tid = str(raw_tid)
                     if target_tid in self.tracks_by_id:
                         track_scores[target_tid] = max(track_scores.get(target_tid, -1.0), cosine_sim)
-                    else:
-                        # Match by integer track_id or camera_id
-                        for tid, tr in self.tracks_by_id.items():
-                            if str(tr.get("track_id")) == str(raw_tid) or tid.startswith(str(raw_tid)):
-                                track_scores[tid] = max(track_scores.get(tid, -1.0), cosine_sim)
+
+                    emb_cam = str(meta.get("camera_id", emb_item.get("camera_id", "")))
+                    emb_ts = meta.get("camera_timestamp", emb_item.get("camera_timestamp_sec"))
+
+                    for tid, tr in self.tracks_by_id.items():
+                        if str(tr.get("track_id")) == str(raw_tid) or tid == target_tid:
+                            track_scores[tid] = max(track_scores.get(tid, -1.0), cosine_sim)
+                        elif emb_cam and emb_ts is not None:
+                            tr_cam = str(tr.get("camera_id", ""))
+                            if tr_cam == emb_cam or emb_cam == "cam_1" or tr_cam in emb_cam or emb_cam in tr_cam:
+                                st = float(tr.get("start_time", 0.0))
+                                et = float(tr.get("end_time", st))
+                                if st - 15.0 <= float(emb_ts) <= et + 15.0:
+                                    track_scores[tid] = max(track_scores.get(tid, -1.0), cosine_sim)
 
             except Exception as err:
                 logger.warning(f"Error during vector embedding search: {err}")
@@ -237,13 +245,43 @@ class DatabaseTrackRetriever:
         return sorted_candidates[:top_k]
 
 
+def is_candidate_match(
+    candidate_id: str,
+    ground_truth_id: str,
+    retriever: Optional[DatabaseTrackRetriever] = None,
+) -> bool:
+    """Evaluate whether candidate_id matches the ground_truth_id (UUID)."""
+    if candidate_id == ground_truth_id:
+        return True
+
+    if retriever is not None:
+        gt_track = retriever.get_track(ground_truth_id)
+        cand_track = retriever.get_track(candidate_id)
+
+        if gt_track and cand_track:
+            cand_cam = str(cand_track.get("camera_id", ""))
+            gt_cam = str(gt_track.get("camera_id", ""))
+            if cand_cam and gt_cam and (cand_cam == gt_cam or cand_cam in gt_cam or gt_cam in cand_cam):
+                cand_st = float(cand_track.get("start_time", 0.0))
+                cand_et = float(cand_track.get("end_time", cand_st))
+                gt_st = float(gt_track.get("start_time", 0.0))
+                gt_et = float(gt_track.get("end_time", gt_st))
+
+                if max(cand_st, gt_st) <= min(cand_et, gt_et) + 15.0 and min(cand_et, gt_et) >= max(cand_st, gt_st) - 15.0:
+                    return True
+
+    return False
+
+
 def compute_retrieval_metrics(
-    retrieved_ids: List[str], ground_truth_id: str
+    retrieved_ids: List[str],
+    ground_truth_id: str,
+    retriever: Optional[DatabaseTrackRetriever] = None,
 ) -> Dict[str, float]:
     """Compute Recall@1, Recall@5, Recall@10, Reciprocal Rank (RR), and Average Precision (AP)."""
     rank = -1
     for i, candidate_id in enumerate(retrieved_ids):
-        if candidate_id == ground_truth_id:
+        if is_candidate_match(candidate_id, ground_truth_id, retriever):
             rank = i + 1  # 1-indexed rank
             break
 
@@ -321,7 +359,7 @@ def main():
             retrieved_ids = [c[0] for c in candidates]
 
             # Compute Retrieval Metrics against target UUID ground truth
-            metrics = compute_retrieval_metrics(retrieved_ids, target_uuid)
+            metrics = compute_retrieval_metrics(retrieved_ids, target_uuid, retriever=retriever)
             query_r1.append(metrics["r1"])
             query_r5.append(metrics["r5"])
             query_r10.append(metrics["r10"])

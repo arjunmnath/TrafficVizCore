@@ -123,21 +123,25 @@ class Qwen3VLAgenticReasoner(BaseAgenticVLMReasoner):
             "- Call ONE tool at a time. Wait for its result before deciding next.\n"
             "- Tool outputs are the ONLY source of truth. Never fabricate results.\n"
             "- When you have sufficient evidence, produce a final answer with NO tool calls.\n\n"
+            "## Query Word Decomposition & Encoding Rules\n"
+            "- ONLY encode NOUNS and visual entity descriptors (e.g. 'red car', 'person in black shirt') in `encode_and_search_vector_store`.\n"
+            "- DO NOT include verbs, actions, or motions (e.g. 'turning left', 'running', 'walking past') in vector search query text.\n"
+            "- RETRIEVE candidates using noun-focused query text.\n"
+            "- VERIFY described verbs and actions visually using perception tools (`inspect_visual_candidate`, `get_entire_frame`).\n\n"
             "## Tool Rules\n"
-            "- `encode_and_search_vector_store`: retrieves candidates. Does NOT verify.\n"
-            "- `inspect_visual_candidate`: extracts a frame crop and returns it. "
-            "YOU analyze the image and judge if it matches.\n"
+            "- `encode_and_search_vector_store`: retrieves candidates using noun-only text. Does NOT verify actions.\n"
+            "- `inspect_visual_candidate`: extracts a frame crop/context for visual inspection. "
+            "YOU analyze the image to judge if it matches both nouns and described verbs/actions.\n"
             "- `get_temporal_context`: finds nearby events for relationship queries.\n"
             "- `query_metadata`: filters by camera_id/timestamp/class only.\n\n"
-            "## Relationship Queries\n"
-            "For queries like 'bus followed by car': verify first object, use "
-            "`get_temporal_context` for the second, then inspect.\n\n"
+            "## Relationship & Action Queries\n"
+            "Encode primary nouns to search vector store → inspect candidates to verify verbs/actions → confirm only when both noun appearance and verb action are verified.\n\n"
             "## Final Answer\n"
             "When done, respond with analysis and:\n"
             "<final_answer>\n"
             '{"candidates": [{"camera_id": "...", "video_pos_ms": ..., '
             '"track_id": ..., "confidence": 0.0-1.0, '
-            '"explanation": "evidence from inspection"}]}\n'
+            '"explanation": "evidence from inspection (nouns & verified actions)"}]}\n'
             "</final_answer>\n\n"
             "To call a tool, use:\n"
             '<tool_call>\n{"name": "tool_name", "arguments": {"key": "value"}}\n</tool_call>'

@@ -53,15 +53,21 @@ class InferenceToolRegistry:
                 "description": (
                     "Encode a natural-language query into an embedding and "
                     "retrieve the top-K most semantically similar track events "
-                    "from the vector store. Returns candidate metadata only — "
-                    "does NOT verify visual correctness."
+                    "from the vector store. CRITICAL: Pass ONLY NOUNS and static visual descriptors. "
+                    "Exclude verbs and actions, which must be verified visually after candidate retrieval. "
+                    "Returns candidate metadata only — does NOT verify visual correctness."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "query_text": {
                             "type": "string",
-                            "description": "Natural language query describing target appearance or context.",
+                            "description": (
+                                "Natural language query text containing ONLY NOUNS, target entities, "
+                                "and visual appearance attributes (e.g. 'red car', 'person in blue jacket'). "
+                                "Exclude all verbs, actions, motions, and directions (e.g. 'turning left', 'walking past', 'running'), "
+                                "which must be verified visually by inspecting candidate frames."
+                            ),
                         },
                         "top_k": {
                             "type": "integer",
